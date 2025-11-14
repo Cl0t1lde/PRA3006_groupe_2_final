@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Type 1 Diabetes Pathway (WP17)</title>
+  <link rel="stylesheet" href="chat.css" />
+  <!-- D3.js -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <!-- Your script (runs after HTML is loaded) -->
+  <script defer src="chat.js"></script>
+</head>
+<body>
+  <h1>Type 1 Diabetes Pathway (WP17)</h1>
+
+  <p>
+    This page loads the pathway from WikiPathways (ID <strong>WP17</strong>)
+    and shows:<br />
+    • on the <strong>left</strong>: a table of <em>unique</em> interactions;<br />
+    • on the <strong>right</strong>: a network diagram of the same interactions.
+  </p>
+
+  <div class="controls">
+    <button id="loadBtn">Load / Reload diagram</button>
+    <span id="status">Ready.</span>
+  </div>
+
+  <div class="layout">
+    <!-- LEFT: TABLE -->
+    <div class="table-container">
+      <h2>Interactions (unique, after merging)</h2>
+      <table id="resultsTable">
+        <thead>
+          <tr>
+            <th>Source</th>
+            <th>Target</th>
+            <th>Source link (WikiPathways IRI)</th>
+          </tr>
+        </thead>
+        <tbody id="resultsBody">
+          <!-- Filled by JavaScript -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- RIGHT: GRAPH -->
+    <div class="graph-container">
+      <svg id="graph" width="800" height="600"></svg>
+    </div>
+  </div>
+</body>
+</html>
