@@ -1,43 +1,18 @@
 document.addEventListener("DOMContentLoaded", () => {
-
   const dropdown = document.getElementById('Pathway');
-
-  dropdown.addEventListener('change', function() {
-    const selectedPathway = dropdown.value;
-    console.log("Selected:", selectedPathway);
-    updateQuery(selectedPathway);
-    runEverything();
+  dropdown.addEventListener('change', () => {
+    const pathway = dropdown.value;
+    if (pathway) runEverything(pathway);
   });
-
 });
 
-// script.js
-const endpointUrl = 'https://sparql.wikipathways.org/sparql/'; // defines Query Endpoint
-
+const endpointUrl = 'https://sparql.wikipathways.org/sparql/';
 var results
-// Code for Query
-var query = `
-PREFIX wp: <http://vocabularies.wikipathways.org/wp#>
-PREFIX dcterms: <http://purl.org/dc/terms/>
-PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+let geneResults = []; // store results of the gene query
 
-SELECT DISTINCT ?sourceLabel ?targetLabel ?interactionLabel ?interactionType
-WHERE {
-  ?pathway a wp:Pathway ;
-           dcterms:identifier "WP3855" .
 
-  ?interaction a wp:Interaction ;
-               dcterms:isPartOf ?pathway ;
-               wp:source ?source ;
-               wp:target ?target .
-
-  ?source rdfs:label ?sourceLabel .
-  ?target rdfs:label ?targetLabel .
-}
-`;
-
-function updateQuery(pathway) {
-  query = `
+// Generate SPARQL query for a given pathway
+const getQuery = (pathway) => `
 PREFIX wp: <http://vocabularies.wikipathways.org/wp#>
 PREFIX dcterms: <http://purl.org/dc/terms/>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -56,74 +31,104 @@ WHERE {
   ?target rdfs:label ?targetLabel .
 }
 `;
-console.log("Query:", pathway);
+
+const getGeneQuery = (pathwayId) => `
+PREFIX wp: <http://vocabularies.wikipathways.org/wp#>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT DISTINCT ?geneProduct ?geneProductLabel ?pathway
+WHERE {
+  ?geneProduct a wp:GeneProduct . 
+  ?geneProduct rdfs:label ?geneProductLabel .
+  ?geneProduct dcterms:isPartOf ?pathway .
+  ?pathway a wp:Pathway .
+  ?pathway dcterms:identifier "${pathwayId}" . 
+}
+`;
+
+
+// Fetch SPARQL results
+async function runQuery(pathway) {
+  try {
+    const url = endpointUrl + '?query=' + encodeURIComponent(getQuery(pathway));
+    const res = await fetch(url, { headers: { Accept: 'application/sparql-results+json' } });
+    if (!res.ok) throw new Error(res.statusText);
+    const data = await res.json();
+    results = data.results.bindings || [];
+    console.log("SPARQL results:", results);
+  } catch (err) {
+    console.error("Query failed:", err);
+    results = [];
+  }
 }
 
-//define funtion to run Query
-async function runQuery() { //async allows us to wait (await)
-  const url = endpointUrl + '?query=' + encodeURIComponent(query); // defines request URL using the endpoint + Query code
-  // Waits for server to respond before saving as a constant
-  const response = await fetch(url, {
-    headers: { 'Accept': 'application/sparql-results+json' }
-  });
-  // gets data as json from response?
-  const data = await response.json();
-  results = data.results.bindings; // gets results from the data (bindings -> one row)
+async function runGeneQuery(pathwayId) {
+  try {
+    const url = endpointUrl + '?query=' + encodeURIComponent(getGeneQuery(pathwayId));
+    const res = await fetch(url, { headers: { Accept: 'application/sparql-results+json' } });
+    if (!res.ok) throw new Error(res.statusText);
+    const data = await res.json();
+    geneResults = data.results.bindings || [];
+  } catch (err) {
+    console.error("Gene query failed:", err);
+    geneResults = [];
+  }
 }
- 
+
+// Populate table
 function createTable() {
-  const tableBody = document.getElementById("results"); //Gets the table of our html
-  
-  tableBody.innerHTML = "";
-  results.forEach(row => { // For each row of our table:
-    const tr = document.createElement("tr"); //Creates a constant holding new row in the websites table
-    //defines the collumns
-    tr.innerHTML = `
-      <td>${row.sourceLabel.value}</td>
-      <td>${row.targetLabel.value}</td>
-    `;
-    tableBody.appendChild(tr);// creates the row in the HTML with the constant tr
-  });
-  console.log(tableBody);
-  console.log("HELLO");
+  const tbody = document.getElementById("results");
+  tbody.innerHTML = results.length
+    ? results.map(r => `<tr><td>${r.sourceLabel.value}</td><td>${r.targetLabel.value}</td></tr>`).join('')
+    : "<tr><td colspan='2'>No data found</td></tr>";
 }
 
+function createGeneTable() {
+  const tbody = document.getElementById("gene-results");
+  tbody.innerHTML = geneResults.length
+    ? geneResults.map(r => {
+        const geneId = r.geneProduct.value; // full URI of gene product
+        const label = r.geneProductLabel.value;
+        return `
+          <tr>
+            <td><a href="${geneId}" target="_blank">${geneId}</a></td>
+            <td>${label}</td>
+          </tr>`;
+      }).join('')
+    : "<tr><td colspan='2'>No data found</td></tr>";
+}
+
+
+
+// Create network visualization
 function createNetwork() {
-  // Create node and edge arrays for the vis-network
+  const container = document.getElementById('network');
+  container.innerHTML = ""; // clear previous network
+  if (!results.length) return;
+
   const nodesSet = new Set();
   const edges = [];
 
-  results.forEach(row => {
-    const source = row.sourceLabel.value;
-    const target = row.targetLabel.value;
-    nodesSet.add(source);
-    nodesSet.add(target);
-    edges.push({ from: source, to: target });
+  results.forEach(r => {
+    nodesSet.add(r.sourceLabel.value);
+    nodesSet.add(r.targetLabel.value);
+    edges.push({ from: r.sourceLabel.value, to: r.targetLabel.value });
   });
 
   const nodes = Array.from(nodesSet).map(label => ({ id: label, label }));
-
-  // Display the network
-  const container = document.getElementById('network');
-  const dataVis = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
-  const options = {
+  new vis.Network(container, { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) }, {
     layout: { hierarchical: { direction: "UD", sortMethod: "directed" } },
     edges: { arrows: 'to', color: { color: '#0077cc' } },
-    nodes: {
-      shape: 'box',
-      color: { background: '#e7f0ff', border: '#0077cc' },
-      font: { color: '#333' }
-    },
+    nodes: { shape: 'box', color: { background: '#e7f0ff', border: '#0077cc' }, font: { color: '#333' } },
     physics: false
-  };
-
-  new vis.Network(container, dataVis, options);
+  });
 }
 
-async function runEverything() {
-  await runQuery();
-  createTable();
-  createNetwork();
+async function runEverything(pathwayId) {
+  await runQuery(pathwayId);       // original table/network
+  await runGeneQuery("WP17");      // gene product table (hard-coded to WP17)
+  createTable();                   // original table
+  createNetwork();                 // original network
+  createGeneTable();               // gene product table
 }
-// Run function that runs the Query and sends data to html
-runEverything();
