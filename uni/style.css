@@ -1,0 +1,33 @@
+body { /* Defines text in html references as body */
+  font-family: 'Segoe UI', sans-serif;
+  background-color: #fafafa;
+  margin: 50px;
+  color: #333;
+  text-align: center;
+}
+
+h1 { /* Defines text in html references as h1 */
+  color: #0077cc;
+  margin-bottom: 30px;
+}
+
+table { /* Defines text in html references as table */
+  margin: 0 auto;
+  border-collapse: collapse;
+  width: 60%;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+th, td { /* Defines text in html references as th & td */
+  padding: 12px 15px;
+  border-bottom: 1px solid #ddd;
+}
+
+th { /* extra for th. Not for td */
+  background-color: #0077cc;
+  color: white;
+}
+
+tr:hover { /* Defines text in html when mouse hovering */
+  background-color: #f1f1f1;
+}

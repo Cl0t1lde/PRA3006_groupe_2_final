@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pathway WP3855</title> <!-- Title of Website -->
+  <link rel="stylesheet" href="style.css"> <!-- Reference to CCS Style sheet -->
+  <script defer src="script.js"></script> <!-- Rference to getQuery JavaScript script-->
+   <script defer src="Tree.js"></script>
+  <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+</head>
+<body> <!-- Start of WebPage -->
+  <h1>Components of Pathway</h1> <!-- Header Nb1 -->
+  <table> <!-- Start Table -->
+    <thead>
+      <tr> <!-- Start Row 1 -->
+        <th>Source</th> <!-- Table Header 1-->
+        <th>Target</th> <!-- Table Header 2 -->
+      </tr><!-- End Row 1 -->
+    </thead>
+    <tbody id="results"></tbody> <!-- call to results from JavaScript -->
+  </table> <!-- End Table -->
+  <div id="network" style="width: 100%; height: 600px; border: 1px solid lightgray;"></div>
+</body>
+</html>
