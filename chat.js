@@ -1,11 +1,20 @@
-// =====================================================
-//  ALIAS + NORMALIZATION
-// =====================================================
-const aliasMap = {}; // Add manual aliases if needed
+const endpoint = "https://sparql.wikipathways.org/sparql";
+const aliasMap = {};
 
+const svg = d3.select("#graph");
+const width = svg.node().clientWidth;
+const height = svg.node().clientHeight;
+const statusEl = document.getElementById("status");
+const loadBtn = document.getElementById("loadBtn");
+const pathwaySelect = document.getElementById("pathwaySelect");
+const pathwayLabel = document.getElementById("pathwayLabel");
+
+// =====================================================
+//  DEDUPLICATION (from lionel.js)
+// =====================================================
 function removeDuplicateInteractions3(rows) {
-  const seenEdges = new Set();       // (src || tgt) duplicate remover
-  const canonicalLabel = new Map();  // <-- FIXED: map URI → chosen label
+  const seenEdges = new Set();       // deduplicate by source/target URI
+  const canonicalLabel = new Map();  // URI -> chosen label
   const result = [];
 
   rows.forEach(inter => {
@@ -16,19 +25,19 @@ function removeDuplicateInteractions3(rows) {
 
     if (!src || !tgt) return;
 
-    // ---------- FIXED: canonicalize SOURCE ----------
+    // canonicalize source
     if (!canonicalLabel.has(src)) {
-      canonicalLabel.set(src, srcLabel);   // first label becomes canonical
+      canonicalLabel.set(src, srcLabel);
     }
-    srcLabel = canonicalLabel.get(src);    // use canonical form
+    srcLabel = canonicalLabel.get(src);
 
-    // ---------- FIXED: canonicalize TARGET ----------
+    // canonicalize target
     if (!canonicalLabel.has(tgt)) {
       canonicalLabel.set(tgt, tgtLabel);
     }
     tgtLabel = canonicalLabel.get(tgt);
 
-    // ---------- DEDUPLICATION ----------
+    // deduplicate edge
     const edgeKey = src + "||" + tgt;
     if (seenEdges.has(edgeKey)) {
       console.log("skip duplicate:", edgeKey);
@@ -48,44 +57,38 @@ function removeDuplicateInteractions3(rows) {
   return result;
 }
 
-
-function normalizeLabel(label, existing = {}, aliasMap = {}) {
+// =====================================================
+//  LABEL NORMALIZATION (from original chat.js)
+// =====================================================
+function normalizeLabel(label, nodeMap) {
   const clean = label.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const core = clean.split("/")[0];
-  const finalCore = aliasMap[core] || core;
-
-  let canonical = finalCore;
-  for (const key of Object.keys(existing)) {
-    const min = Math.min(key.length, finalCore.length);
-    if (min >= 3 && (key.startsWith(finalCore) || finalCore.startsWith(key))) {
-      canonical = key;
+  const core0 = clean.split("/")[0];
+  const core = aliasMap[core0] || core0;
+  let key = core;
+  for (const [k] of nodeMap) {
+    const min = Math.min(k.length, core.length);
+    if (min >= 3 && (k.startsWith(core) || core.startsWith(k))) {
+      key = k;
       break;
     }
   }
-
-  const current = existing[canonical];
-  if (!current) return { key: canonical, label };
-
-  const cleanCurrent = current.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const extraCur = cleanCurrent.startsWith(finalCore) ? cleanCurrent.slice(finalCore.length) : "";
-  const extraNew = clean.startsWith(finalCore) ? clean.slice(finalCore.length) : "";
-
+  const existing = nodeMap.get(key);
+  if (!existing) return { key, label };
+  const cleanExisting = existing.label.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const extraCur = cleanExisting.startsWith(core) ? cleanExisting.slice(core.length) : "";
+  const extraNew = clean.startsWith(core) ? clean.slice(core.length) : "";
   const curNum = /^[0-9]+$/.test(extraCur);
   const newNum = /^[0-9]+$/.test(extraNew);
-
-  let better = current;
-  if (!extraCur && newNum) better = current;
+  let better = existing.label;
+  if (!extraCur && newNum) better = existing.label;
   else if (!extraNew && curNum) better = label;
-  else better = label.length > current.length ? label : current;
-
-  return { key: canonical, label: better };
+  else better = label.length > existing.label.length ? label : existing.label;
+  return { key, label: better };
 }
 
 // =====================================================
-//  SPARQL ENDPOINT + QUERY BUILDER
+//  SPARQL QUERY (from lionel.js)
 // =====================================================
-const endpoint = "https://sparql.wikipathways.org/sparql";
-
 const getQuery = (pathwayID) => `
 PREFIX wp: <http://vocabularies.wikipathways.org/wp#>
 PREFIX dcterms: <http://purl.org/dc/terms/>
@@ -114,11 +117,10 @@ WHERE {
   OPTIONAL { ?target a ?targetType . }
   OPTIONAL { ?interaction a ?interactionType . }
 }
-
 `;
 
 // =====================================================
-//  TABLE HANDLING
+//  TABLE HANDLING (from lionel.js)
 // =====================================================
 function clearTable() {
   const tbody = document.getElementById("resultsBody");
@@ -154,81 +156,81 @@ function highlightRowsForNode(nodeId) {
 }
 
 // =====================================================
-//  ROWS → NODES + LINKS + TABLE
+//  ROWS → GRAPH (from original chat.js)
 // =====================================================
 function convertToGraph(rows, labelToIri) {
   const nodeMap = new Map();
   const links = [];
   const tableRows = [];
-  const edgeKeySet = new Set();
+  const edgeSet = new Set();
 
   function getNode(label) {
-    const existing = {};
-    nodeMap.forEach((v, k) => (existing[k] = v.label));
-    const norm = normalizeLabel(label, existing, aliasMap);
-    let node = nodeMap.get(norm.key);
+    const n = normalizeLabel(label, nodeMap);
+    let node = nodeMap.get(n.key);
     if (!node) {
-      node = { id: norm.key, label: norm.label };
-      nodeMap.set(norm.key, node);
+      node = { id: n.key, label: n.label };
+      nodeMap.set(n.key, node);
     } else {
-      node.label = norm.label;
+      node.label = n.label;
     }
     return node;
   }
 
-  for (const row of rows) {
-    const sourceNode = getNode(row.sourceLabel.value);
-    const targetNode = getNode(row.targetLabel.value);
+  rows.forEach(r => {
+    const sNode = getNode(r.sourceLabel.value);
+    const tNode = getNode(r.targetLabel.value);
+    const key = sNode.id + "||" + tNode.id;
+    if (edgeSet.has(key)) return;
+    edgeSet.add(key);
+    links.push({
+      source: sNode.id,
+      target: tNode.id,
+      label: r.interactionLabel ? r.interactionLabel.value : "",
+      type: r.interactionType ? r.interactionType.value : ""
+    });
+    const iri = labelToIri.get(sNode.label) || "#";
+    tableRows.push({
+      source: sNode.label,
+      target: tNode.label,
+      url: iri,
+      sourceId: sNode.id,
+      targetId: tNode.id
+    });
+  });
 
-    const edgeKey = sourceNode.id + "||" + targetNode.id;
-    if (!edgeKeySet.has(edgeKey)) {
-      edgeKeySet.add(edgeKey);
-      links.push({
-        source: sourceNode.id,
-        target: targetNode.id,
-        label: row.interactionLabel ? row.interactionLabel.value : "",
-        type: row.interactionType ? row.interactionType.value : "",
-      });
-
-      const sourceIri = labelToIri.get(sourceNode.label) || "#";
+  const nodes = Array.from(nodeMap.values());
+  const hasSource = new Set(tableRows.map(r => r.sourceId));
+  nodes.forEach(n => {
+    if (!hasSource.has(n.id)) {
+      const iri = labelToIri.get(n.label) || "#";
       tableRows.push({
-        source: sourceNode.label,
-        target: targetNode.label,
-        url: sourceIri,
-        sourceId: sourceNode.id,
-        targetId: targetNode.id
-      });
-    }
-  }
-
-  const nodesArray = Array.from(nodeMap.values());
-  const hasSourceRow = new Set(tableRows.map(r => r.sourceId));
-
-  nodesArray.forEach(node => {
-    if (!hasSourceRow.has(node.id)) {
-      const iri = labelToIri.get(node.label) || "#";
-      tableRows.push({
-        source: node.label,
+        source: n.label,
         target: "(no outgoing interaction)",
         url: iri,
-        sourceId: node.id,
-        targetId: "",
+        sourceId: n.id,
+        targetId: ""
       });
     }
   });
 
-  return { nodes: nodesArray, links, tableRows };
+  return { nodes, links, tableRows };
 }
 
 // =====================================================
-//  DRAW GRAPH
+//  GRAPH DRAWING (static layered layout from original chat.js)
 // =====================================================
-const svg = d3.select("#graph");
-const width = svg.node().clientWidth;
-const height = svg.node().clientHeight;
-
 function clearGraph() {
   svg.selectAll("*").remove();
+}
+
+function shiftedTarget(d, offset) {
+  const dx = d.target.x - d.source.x;
+  const dy = d.target.y - d.source.y;
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+  return {
+    x: d.target.x - (dx / len) * offset,
+    y: d.target.y - (dy / len) * offset
+  };
 }
 
 function drawGraph(graph) {
@@ -237,26 +239,81 @@ function drawGraph(graph) {
 
   svg.selectAll("*").remove();
 
-  svg.append("defs").append("marker")
+  const deg = new Map();
+  nodes.forEach(n => deg.set(n.id, { in: 0, out: 0 }));
+  links.forEach(l => {
+    deg.get(l.source).out++;
+    deg.get(l.target).in++;
+  });
+
+  const layer = new Map();
+  nodes.forEach(n => {
+    const d = deg.get(n.id);
+    if (d.in === 0 && d.out > 0) layer.set(n.id, 0);       // pure sources (top)
+    else layer.set(n.id, 1);                              // others for now
+  });
+
+  // relax layers so targets are at least 1 below their sources
+  let changed = true;
+  while (changed) {
+    changed = false;
+    links.forEach(l => {
+      const sL = layer.get(l.source);
+      const tL = layer.get(l.target);
+      if (tL <= sL) {
+        layer.set(l.target, sL + 1);
+        changed = true;
+      }
+    });
+  }
+
+  const maxLayer = Math.max(...layer.values());
+  const layerNodes = [];
+  for (let i = 0; i <= maxLayer; i++) layerNodes.push([]);
+  nodes.forEach(n => layerNodes[layer.get(n.id)].push(n));
+
+  const marginX = 40, marginY = 40;
+  const stepY = (height - 2 * marginY) / Math.max(1, maxLayer);
+  layerNodes.forEach((ln, i) => {
+    if (!ln.length) return;
+    const stepX = (width - 2 * marginX) / (ln.length + 1);
+    ln.forEach((n, j) => {
+      n.x = marginX + stepX * (j + 1);
+      n.y = marginY + stepY * i;
+    });
+  });
+
+  // convert link endpoints from ids to node objects
+  const nodesById = new Map(nodes.map(n => [n.id, n]));
+  links.forEach(l => {
+    l.source = nodesById.get(l.source);
+    l.target = nodesById.get(l.target);
+  });
+
+  svg.append("defs")
+    .append("marker")
     .attr("id", "arrow")
-    .attr("viewBox", "0 -5 10 10")
-    .attr("refX", 15)
-    .attr("refY", 0)
-    .attr("markerWidth", 6)
-    .attr("markerHeight", 6)
+    .attr("viewBox", "0 0 10 10")
+    .attr("refX", 10)
+    .attr("refY", 5)
+    .attr("markerWidth", 10)
+    .attr("markerHeight", 10)
     .attr("orient", "auto")
     .append("path")
-    .attr("d", "M0,-5L10,0L0,5")
-    .attr("fill", "#888");
+    .attr("d", "M 0 0 L 10 5 L 0 10 z")
+    .attr("fill", "#555");
 
-  const link = svg.append("g").attr("class", "links")
+  const link = svg.append("g")
+    .attr("class", "links")
     .selectAll("line")
     .data(links)
     .enter()
     .append("line")
-    .attr("class", "link");
+    .attr("class", "link")
+    .attr("marker-end", "url(#arrow)");
 
-  const node = svg.append("g").attr("class", "nodes")
+  const node = svg.append("g")
+    .attr("class", "nodes")
     .selectAll("g")
     .data(nodes)
     .enter()
@@ -267,82 +324,68 @@ function drawGraph(graph) {
   node.append("text").attr("x", 18).attr("y", 3).text(d => d.label);
 
   link.append("title").text(d => (d.label || "Interaction") + (d.type ? ` (${d.type})` : ""));
-  node.on("click", (event, d) => highlightRowsForNode(d.id));
 
-  const simulation = d3.forceSimulation(nodes)
-    .force("link", d3.forceLink(links).id(d => d.id).distance(120))
-    .force("charge", d3.forceManyBody().strength(-200))
-    .force("center", d3.forceCenter(width / 2, height / 2));
-
-  const margin = 30;
-  simulation.on("tick", () => {
-    nodes.forEach(d => {
-      d.x = Math.max(margin, Math.min(width - margin, d.x));
-      d.y = Math.max(margin, Math.min(height - margin, d.y));
-    });
-    link.attr("x1", d => d.source.x)
-        .attr("y1", d => d.source.y)
-        .attr("x2", d => d.target.x)
-        .attr("y2", d => d.target.y);
+  function updatePositions() {
+    link
+      .attr("x1", d => d.source.x)
+      .attr("y1", d => d.source.y)
+      .attr("x2", d => shiftedTarget(d, 20).x)
+      .attr("y2", d => shiftedTarget(d, 20).y);
     node.attr("transform", d => `translate(${d.x},${d.y})`);
-  });
+  }
 
-  node.call(d3.drag()
-    .on("start", (event, d) => { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
-    .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
-    .on("end", (event, d) => { if (!event.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }));
+  node.on("click", (e, d) => highlightRowsForNode(d.id));
+  updatePositions();
+
+  node.call(
+    d3.drag()
+      .on("drag", (e, d) => {
+        d.x = e.x;
+        d.y = e.y;
+        updatePositions();
+      })
+  );
 }
 
 // =====================================================
-//  ADD CUSTOM EDGES
+//  CUSTOM EDGES (from original chat.js)
 // =====================================================
-function addCustomEdges(graphData, edges, labelToIri) {
+function addCustomEdges(graph, edges, labelToIri) {
   edges.forEach(edge => {
-    // Add nodes if missing
     function getNode(label) {
-      const existing = {};
-      graphData.nodes.forEach(n => (existing[n.id] = n.label));
-      const norm = normalizeLabel(label, existing, aliasMap);
-      let node = graphData.nodes.find(n => n.id === norm.key);
+      const nodeMap = new Map(graph.nodes.map(n => [n.id, n]));
+      const n = normalizeLabel(label, nodeMap);
+      let node = graph.nodes.find(g => g.id === n.key);
       if (!node) {
-        node = { id: norm.key, label: norm.label };
-        graphData.nodes.push(node);
+        node = { id: n.key, label: n.label };
+        graph.nodes.push(node);
+      } else {
+        node.label = n.label;
       }
       return node;
     }
-
-    const sourceNode = getNode(edge.source);
-    const targetNode = getNode(edge.target);
-
-    // Add link
-    graphData.links.push({
-      source: sourceNode.id,
-      target: targetNode.id,
+    const sNode = getNode(edge.source);
+    const tNode = getNode(edge.target);
+    graph.links.push({
+      source: sNode.id,
+      target: tNode.id,
       label: "custom",
       type: "custom"
     });
-
-    // Add table row
-    const sourceIri = labelToIri.get(sourceNode.label) || "#";
-    graphData.tableRows.push({
-      source: sourceNode.label,
-      target: targetNode.label,
-      url: sourceIri,
-      sourceId: sourceNode.id,
-      targetId: targetNode.id
+    const iri = labelToIri.get(sNode.label) || "#";
+    graph.tableRows.push({
+      source: sNode.label,
+      target: tNode.label,
+      url: iri,
+      sourceId: sNode.id,
+      targetId: tNode.id
     });
   });
 }
 
-
 // =====================================================
-//  MAIN RUN
+//  MAIN RUN (from lionel.js, adapted to original graph)
 // =====================================================
-const statusEl = document.getElementById("status");
-const loadBtn = document.getElementById("loadBtn");
-const pathwaySelect = document.getElementById("pathwaySelect");
-const pathwayLabel = document.getElementById("pathwayLabel");
-
 loadBtn.addEventListener("click", run);
 pathwaySelect.addEventListener("change", run);
 run();
@@ -355,46 +398,45 @@ async function run() {
   clearTable();
 
   try {
-    const headers = { "Accept": "application/sparql-results+json" };
-    
-    
+    const headers = { Accept: "application/sparql-results+json" };
+    const query = getQuery(pathwayId);
+    const res = await fetch(endpoint + "?query=" + encodeURIComponent(query), { headers });
 
-    const url = endpoint + '?query=' + encodeURIComponent(getQuery(pathwayId));
-    const res = await fetch(url, { headers: { Accept: 'application/sparql-results+json' } });
+    if (!res.ok) throw new Error("HTTP " + res.status);
 
-    if (!res.ok) throw new Error(res.statusText);
+    const json = await res.json();
 
-    const data = await res.json();
+    // Use Lionel's deduplication on the raw bindings
+    const deduped = removeDuplicateInteractions3(json.results.bindings) || [];
 
-    let results = removeDuplicateInteractions3(data.results.bindings) || [];
-    const geneProductMap = new Map();
-    data.results.bindings.forEach(row => {
-    geneProductMap.set(row.sourceLabel.value, row.source.value);
+    // Build a label → IRI map from both sources and targets
+    const iriMap = new Map();
+    json.results.bindings.forEach(row => {
+      if (row.sourceLabel && row.source) {
+        iriMap.set(row.sourceLabel.value, row.source.value);
+      }
+      if (row.targetLabel && row.target) {
+        iriMap.set(row.targetLabel.value, row.target.value);
+      }
     });
 
-    const graphData = convertToGraph(results, geneProductMap);
+    const graph = convertToGraph(deduped, iriMap);
 
-    // =====================================================
-    //  CUSTOM INTERACTIONS PER PATHWAY
-    // =====================================================
+    // Custom edges per pathway, as before
     if (pathwayId === "WP17") {
-      addCustomEdges(graphData, [
+      addCustomEdges(graph, [
         { source: "PIP", target: "AKT-1" },
         { source: "ProteinA", target: "ProteinB" }
-      ], geneProductMap);
+      ], iriMap);
     } else if (pathwayId === "WP3855") {
-      addCustomEdges(graphData, [
-        { source: "GeneM", target: "GeneN" }
-      ], geneProductMap);
+      addCustomEdges(graph, [{ source: "GeneM", target: "GeneN" }], iriMap);
     }
 
-    // Update table and graph
-    fillTableFromGraph(graphData.tableRows);
-    drawGraph(graphData);
-
-
+    fillTableFromGraph(graph.tableRows);
+    drawGraph(graph);
     statusEl.textContent = " Done.";
   } catch (e) {
+    console.error(e);
     statusEl.textContent = " Error: " + e.message;
   }
 }
