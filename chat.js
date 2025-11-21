@@ -117,58 +117,6 @@ WHERE {
 
 `;
 
-function buildInteractionQuery(pathwayId) {
-  return `
-    PREFIX wp: <http://vocabularies.wikipathways.org/wp#>
-    PREFIX dcterms: <http://purl.org/dc/terms/>
-    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-
-    SELECT DISTINCT ?sourceLabel ?targetLabel ?interactionLabel ?interactionType
-    WHERE {
-      ?pathway a wp:Pathway ;
-               dcterms:identifier "${pathwayId}" .
-      ?interaction a wp:Interaction ;
-                   dcterms:isPartOf ?pathway ;
-                   wp:source ?source ;
-                   wp:target ?target .
-      ?source rdfs:label ?sourceLabel .
-      ?target rdfs:label ?targetLabel .
-      OPTIONAL { ?interaction rdfs:label ?interactionLabel . }
-      OPTIONAL { ?interaction wp:interactionType ?interactionType . }
-    }
-  `;
-}
-
-// =====================================================
-//  FETCH GENE PRODUCTS
-// =====================================================
-async function fetchGeneProducts(pathwayId) {
-  const query = `
-    PREFIX wp: <http://vocabularies.wikipathways.org/wp#>
-    PREFIX dcterms: <http://purl.org/dc/terms/>
-    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-
-    SELECT DISTINCT ?geneProduct ?geneProductLabel ?pathway
-    WHERE {
-      ?geneProduct a wp:GeneProduct .
-      ?geneProduct rdfs:label ?geneProductLabel .
-      ?geneProduct dcterms:isPartOf ?pathway .
-      ?pathway a wp:Pathway .
-      ?pathway dcterms:identifier "${pathwayId}" .
-    }
-  `;
-  const res = await fetch(endpoint + "?query=" + encodeURIComponent(query), {
-    headers: { "Accept": "application/sparql-results+json" }
-  });
-  if (!res.ok) throw new Error("GeneProduct HTTP " + res.status);
-  const data = await res.json();
-  const map = new Map();
-  data.results.bindings.forEach(row => {
-    map.set(row.geneProductLabel.value, row.geneProduct.value);
-  });
-  return map;
-}
-
 // =====================================================
 //  TABLE HANDLING
 // =====================================================
