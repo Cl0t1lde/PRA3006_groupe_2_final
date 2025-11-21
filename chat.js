@@ -3,6 +3,52 @@
 // =====================================================
 const aliasMap = {}; // Add manual aliases if needed
 
+function removeDuplicateInteractions3(rows) {
+  const seenEdges = new Set();       // (src || tgt) duplicate remover
+  const canonicalLabel = new Map();  // <-- FIXED: map URI → chosen label
+  const result = [];
+
+  rows.forEach(inter => {
+    let src = inter?.source?.value;
+    let tgt = inter?.target?.value;
+    let srcLabel = inter?.sourceLabel?.value;
+    let tgtLabel = inter?.targetLabel?.value;
+
+    if (!src || !tgt) return;
+
+    // ---------- FIXED: canonicalize SOURCE ----------
+    if (!canonicalLabel.has(src)) {
+      canonicalLabel.set(src, srcLabel);   // first label becomes canonical
+    }
+    srcLabel = canonicalLabel.get(src);    // use canonical form
+
+    // ---------- FIXED: canonicalize TARGET ----------
+    if (!canonicalLabel.has(tgt)) {
+      canonicalLabel.set(tgt, tgtLabel);
+    }
+    tgtLabel = canonicalLabel.get(tgt);
+
+    // ---------- DEDUPLICATION ----------
+    const edgeKey = src + "||" + tgt;
+    if (seenEdges.has(edgeKey)) {
+      console.log("skip duplicate:", edgeKey);
+      return;
+    }
+
+    seenEdges.add(edgeKey);
+    result.push({
+      ...inter,
+      sourceLabel: { value: srcLabel },
+      targetLabel: { value: tgtLabel }
+    });
+
+    console.log("keep:", edgeKey);
+  });
+
+  return result;
+}
+
+
 function normalizeLabel(label, existing = {}, aliasMap = {}) {
   const clean = label.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   const core = clean.split("/")[0];
@@ -39,6 +85,37 @@ function normalizeLabel(label, existing = {}, aliasMap = {}) {
 //  SPARQL ENDPOINT + QUERY BUILDER
 // =====================================================
 const endpoint = "https://sparql.wikipathways.org/sparql";
+
+const getQuery = (pathwayID) => `
+PREFIX wp: <http://vocabularies.wikipathways.org/wp#>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT DISTINCT 
+    ?source ?sourceLabel 
+    ?target ?targetLabel 
+    ?interaction 
+    ?interactionType 
+    ?sourceType 
+    ?targetType
+WHERE {
+  ?pathway a wp:Pathway ;
+           dcterms:identifier "${pathwayID}" .
+
+  ?interaction a wp:Interaction ;
+               dcterms:isPartOf ?pathway ;
+               wp:source ?source ;
+               wp:target ?target .
+
+  ?source rdfs:label ?sourceLabel .
+  ?target rdfs:label ?targetLabel .
+
+  OPTIONAL { ?source a ?sourceType . }
+  OPTIONAL { ?target a ?targetType . }
+  OPTIONAL { ?interaction a ?interactionType . }
+}
+
+`;
 
 function buildInteractionQuery(pathwayId) {
   return `
@@ -331,14 +408,23 @@ async function run() {
 
   try {
     const headers = { "Accept": "application/sparql-results+json" };
-    const geneProductMap = await fetchGeneProducts(pathwayId);
+    
+    
 
-    const interactionQuery = buildInteractionQuery(pathwayId);
-    const interRes = await fetch(endpoint + "?query=" + encodeURIComponent(interactionQuery), { headers });
-    if (!interRes.ok) throw new Error("Interaction HTTP " + interRes.status);
-    const interJson = await interRes.json();
+    const url = endpoint + '?query=' + encodeURIComponent(getQuery(pathwayId));
+    const res = await fetch(url, { headers: { Accept: 'application/sparql-results+json' } });
 
-    const graphData = convertToGraph(interJson.results.bindings, geneProductMap);
+    if (!res.ok) throw new Error(res.statusText);
+
+    const data = await res.json();
+
+    let results = removeDuplicateInteractions3(data.results.bindings) || [];
+    const geneProductMap = new Map();
+    data.results.bindings.forEach(row => {
+    geneProductMap.set(row.sourceLabel.value, row.source.value);
+    });
+
+    const graphData = convertToGraph(results, geneProductMap);
 
     // =====================================================
     //  CUSTOM INTERACTIONS PER PATHWAY
