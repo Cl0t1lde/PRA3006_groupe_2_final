@@ -115,9 +115,11 @@ SELECT DISTINCT
     ?interactionType 
     ?sourceType 
     ?targetType
+    ?pathwayTitle
 WHERE {
   ?pathway a wp:Pathway ;
-           dcterms:identifier "${pathwayID}" .
+           dcterms:identifier "${pathwayID}";
+           dc:title ?pathwayTitle .
 
   ?interaction a wp:Interaction ;
                dcterms:isPartOf ?pathway ;
@@ -652,6 +654,7 @@ function drawGeneFrequencyChart(barData) {
 // =====================================================
 //  MAIN RUN
 // =====================================================
+const pathwayTitle = document.getElementById("pathwayTitle");
 loadBtn.addEventListener("click", run);
 pathwaySelect.addEventListener("change", run);
 
@@ -670,6 +673,7 @@ async function run() {
     if (!res.ok) throw new Error("HTTP " + res.status);
 
     const json = await res.json();
+    pathwayTitle.textContent = data.results.bindings?.[0]?.pathwayTitle?.value ?? "No title";
 
     // Deduplicate using Lionel's function
     const deduped = removeDuplicateInteractions3(json.results.bindings || []);
