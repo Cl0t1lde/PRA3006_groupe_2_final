@@ -673,7 +673,7 @@ async function run() {
     if (!res.ok) throw new Error("HTTP " + res.status);
 
     const json = await res.json();
-    pathwayTitle.textContent = data.results.bindings?.[0]?.pathwayTitle?.value ?? "No title";
+    pathwayTitle.textContent = json.results.bindings?.[0]?.pathwayTitle?.value ?? "No title";
 
     // Deduplicate using Lionel's function
     const deduped = removeDuplicateInteractions3(json.results.bindings || []);
