@@ -741,7 +741,7 @@ async function run() {
         { source: "Akt", target: "Akt1s1"},
         { source: "Akt1s1", target: "mTOR complex"},
         { source: "Rheb", target: "mTOR complex"},
-        { source: "mTOR", target: "4eBP"},
+        { source: "mTOR complex", target: "4eBP"},
         { source: "mTOR complex", target: "S6K"},
         { source: "4eBP", target: "Eif4e"},
         { source: "mTOR complex", target: "LARP1"},

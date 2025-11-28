@@ -8,13 +8,25 @@
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <!-- Your script (runs after HTML is loaded) -->
   <script defer src="chat.js"></script>
+
+  <style>
+    /* Make the frequency chart scrollable */
+    #frequency-chart-wrapper {
+      width: 700px;
+      height: 400px;
+      overflow-y: auto; /* vertical scroll */
+      border: 1px solid #ccc;
+    }
+    #frequency-chart {
+      display: block;
+    }
+  </style>
 </head>
 <body>
   <h1>
     Pathway Viewer –
-    <span id="pathwayLabel">WP17</span>
-     – 
-    <span id="pathwayTitle">Title</span>
+    <span id="pathwayLabel">---</span> –
+    <span id="pathwayTitle">---</span>
   </h1>
 
   <p>
@@ -25,12 +37,11 @@
   </p>
 
   <div class="controls">
-    <!-- NEW: pathway selector -->
     <label for="pathwaySelect"><strong>Choose a Pathway:</strong></label>
     <select id="pathwaySelect">
       <option value="---" selected>---</option>
-      <option value="WP17" selected>WP17</option>
-      <option value="WP3958" selected>WP3958</option>
+      <option value="WP17">WP17</option>
+      <option value="WP3958">WP3958</option>
       <option value="WP3855">WP3855</option>
       <option value="WP3675">WP3675</option>
       <option value="WP4229">WP4229</option>
@@ -57,16 +68,14 @@
   
     <!-- Frequency table -->
     <h2>Gene Frequency Across Pathways (Stacked Bar)</h2>
-    <svg id="frequency-chart" width="700" height="400"></svg>
+    <div id="frequency-chart-wrapper">
+      <svg id="frequency-chart" width="700" height="400"></svg>
+    </div>
   </div>
-  
 
-    <!-- RIGHT: GRAPH -->
+  <!-- RIGHT: GRAPH -->
   <div class="graph-container">
     <svg id="graph" width="800" height="600"></svg>
   </div>
- 
-
-
 </body>
 </html>
