@@ -1,11 +1,18 @@
 const endpoint = "https://sparql.wikipathways.org/sparql";
-const aliasMap = {};
+const aliasMap = {
+  "CDK2": "CyclinDependentKinase2",
+  "AKT-1": "AKT1"
+};
+// GLOBAL accumulation
+const globalFreq = new Map();         // gene → { count, pathways:Set }
+const loadedPathways = new Set();     // pathways we've already counted
+
 
 // SVG & DOM references
-const svg = d3.select("#graph");
+const svg = d3.select("#graph");// create space for the graph
 const width = svg.node().clientWidth;
 const height = svg.node().clientHeight;
-const statusEl = document.getElementById("status");
+const statusEl = document.getElementById("status");//recall elements from the HTML
 const loadBtn = document.getElementById("loadBtn");
 const pathwaySelect = document.getElementById("pathwaySelect");
 const pathwayLabel = document.getElementById("pathwayLabel");
@@ -14,26 +21,26 @@ const pathwayLabel = document.getElementById("pathwayLabel");
 //  DEDUPLICATION (from lionel.js)
 // =====================================================
 function removeDuplicateInteractions3(rows) {
-  const seenEdges = new Set();       // deduplicate by source/target URI
+  const seenEdges = new Set();       // stores the edges to avoid duplicates
   const canonicalLabel = new Map();  // URI -> chosen label
-  const result = [];
+  const result = [];  //will hold the results
 
-  rows.forEach(inter => {
+  rows.forEach(inter => {   //loop trough each element in the rows
     let src = inter?.source?.value;
-    let tgt = inter?.target?.value;
+    let tgt = inter?.target?.value;  //extract the url associeted to the source and target
     let srcLabel = inter?.sourceLabel?.value;
-    let tgtLabel = inter?.targetLabel?.value;
+    let tgtLabel = inter?.targetLabel?.value; //extract the name associeted tot the source and target
 
-    if (!src || !tgt) return;
+    if (!src || !tgt) return; // if either src or tgt is missing skip the iteration
 
     // canonicalize source
-    if (!canonicalLabel.has(src) && srcLabel) {
-      canonicalLabel.set(src, srcLabel);
+    if (!canonicalLabel.has(src) && srcLabel) { //check if the list does not already have the src and if it has an associeted label
+      canonicalLabel.set(src, srcLabel);  //if not yet in the list then add it 
     }
     if (!canonicalLabel.has(src)) {
       canonicalLabel.set(src, src); // fallback
     }
-    srcLabel = canonicalLabel.get(src);
+    srcLabel = canonicalLabel.get(src); // Get a consistent label for src: use human-readable if available, otherwise fallback to the URI
 
     // canonicalize target
     if (!canonicalLabel.has(tgt) && tgtLabel) {
@@ -45,11 +52,10 @@ function removeDuplicateInteractions3(rows) {
     tgtLabel = canonicalLabel.get(tgt);
 
     // deduplicate edge
-    const edgeKey = src + "||" + tgt;
-    if (seenEdges.has(edgeKey)) return;
-
-    seenEdges.add(edgeKey);
-    result.push({
+    const edgeKey = src + "||" + tgt; //define a source target pair ID 
+    if (seenEdges.has(edgeKey)) return; // check if pair ID is not yet in the list
+    seenEdges.add(edgeKey); //add the iD to the list 
+    result.push({ //clean duplicate version of the original row
       ...inter,
       sourceLabel: { value: srcLabel },
       targetLabel: { value: tgtLabel }
@@ -63,15 +69,15 @@ function removeDuplicateInteractions3(rows) {
 //  LABEL NORMALIZATION (from original chat.js)
 // =====================================================
 function normalizeLabel(label, nodeMap) {
-  const clean = label.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const core0 = clean.split("/")[0];
-  const core = aliasMap[core0] || core0;
+  const clean = label.trim().toUpperCase().replace(/[^A-Z0-9/]/g, "");//removes whitespace, converts to uppercase, removes all non-alphanumeric characters (appart from "/")
+  const core0 = clean.split("/")[0]; //take the first part of the label separreted by /
+  const core = aliasMap[core0] || core0; //define the name as either core0 or from the alias map
   let key = core;
 
-  for (const [k] of nodeMap) {
-    const min = Math.min(k.length, core.length);
-    if (min >= 3 && (k.startsWith(core) || core.startsWith(k))) {
-      key = k;
+  for (const [k] of nodeMap) { // looks at keys in the map (names )
+    const min = Math.min(k.length, core.length); //Finds the shorter of the two strings
+    if (min >= 3 && (k.startsWith(core) || core.startsWith(k))) {//only consider matches if at least 3 characters long and the strings start with each other.
+      key = k;//assign label 
       break;
     }
   }
@@ -175,6 +181,9 @@ function convertToGraph(rows, labelToIri) {
   const tableRows = [];
   const edgeSet = new Set();
 
+  const currentPathway = pathwaySelect.value || "UNKNOWN";
+
+
   function getNode(label) {
     const n = normalizeLabel(label, nodeMap);
     let node = nodeMap.get(n.key);
@@ -195,6 +204,19 @@ function convertToGraph(rows, labelToIri) {
 
     const sNode = getNode(sourceLabel);
     const tNode = getNode(targetLabel);
+
+    // ← Update global frequency only if this pathway hasn't been counted yet
+    if (!loadedPathways.has(currentPathway)) {
+      if (!globalFreq.has(sNode.id)) globalFreq.set(sNode.id, { count: 0, pathways: new Set() });
+      if (!globalFreq.has(tNode.id)) globalFreq.set(tNode.id, { count: 0, pathways: new Set() });
+
+      globalFreq.get(sNode.id).pathways.add(currentPathway);
+      globalFreq.get(tNode.id).pathways.add(currentPathway);
+
+      globalFreq.get(sNode.id).count = globalFreq.get(sNode.id).pathways.size;
+      globalFreq.get(tNode.id).count = globalFreq.get(tNode.id).pathways.size;
+    }
+
 
     const key = sNode.id + "||" + tNode.id;
     if (edgeSet.has(key)) return;
@@ -230,10 +252,18 @@ function convertToGraph(rows, labelToIri) {
         sourceId: n.id,
         targetId: ""
       });
+
+      // ← NEW: also count isolated nodes
+      if (!loadedPathways.has(currentPathway)) {
+        if (!globalFreq.has(n.id)) globalFreq.set(n.id, { count: 0, pathways: new Set() });
+        globalFreq.get(n.id).pathways.add(currentPathway);
+        globalFreq.get(n.id).count = globalFreq.get(n.id).pathways.size;
+      }
+
     }
   });
 
-  return { nodes, links, tableRows };
+  return { nodes, links, tableRows};  // ← return it!
 }
 
 // =====================================================
@@ -489,6 +519,136 @@ function addCustomEdges(graph, edges, labelToIri) {
   });
 }
 
+function renderFrequencyTable(freqTable) {
+  const container = document.getElementById("frequency-table");
+  if (!container) return;
+
+  let html = `
+    <table border="1" cellpadding="4" cellspacing="0">
+      <thead>
+        <tr>
+          <th>Gene</th>
+          <th>Count</th>
+          <th>Pathways</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  for (const row of freqTable) {
+    html += `
+      <tr>
+        <td>${row.gene}</td>
+        <td>${row.count}</td>
+        <td>${row.pathways.join(", ")}</td>
+      </tr>
+    `;
+  }
+
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+function drawGeneFrequencyChart(barData) {
+  // --- Gather all pathways dynamically ---
+  const allPathways = new Set();
+  barData.forEach(d => Object.keys(d).forEach(k => { if (k !== "gene") allPathways.add(k); }));
+  const pathways = Array.from(allPathways);
+
+  // --- Sort barData by total count descending ---
+  barData.forEach(d => d.total = pathways.reduce((sum, k) => sum + (d[k] || 0), 0));
+  barData.sort((a, b) => b.total - a.total);
+
+  // --- Dimensions ---
+  const margin = { top: 60, right: 20, bottom: 30, left: 140 };
+  const svgWidth = 700;
+  const svgHeight = barData.length * 25 + margin.top + margin.bottom;
+
+  const svg = d3.select("#frequency-chart")
+    .attr("width", svgWidth)
+    .attr("height", svgHeight)
+    .html(""); // clear previous chart
+
+  const width = svgWidth - margin.left - margin.right;
+  const height = svgHeight - margin.top - margin.bottom;
+
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  // --- Scales ---
+  const x = d3.scaleLinear()
+    .domain([0, d3.max(barData, d => d.total)])
+    .range([0, width]);
+
+  const y = d3.scaleBand()
+    .domain(barData.map(d => d.gene))
+    .range([0, height])
+    .padding(0.1);
+
+  const color = d3.scaleOrdinal(d3.schemeCategory10).domain(pathways);
+
+  // --- Stack data ---
+  const stack = d3.stack()
+    .keys(pathways)
+    .value((d, key) => d[key] || 0);
+
+  const series = stack(barData);
+
+  // --- Tooltip (single div) ---
+  let tooltip = d3.select(".tooltip");
+  if (tooltip.empty()) {
+    tooltip = d3.select("body").append("div")
+      .attr("class", "tooltip")
+      .style("position", "absolute")
+      .style("background", "#fff")
+      .style("padding", "6px 10px")
+      .style("border", "1px solid #aaa")
+      .style("border-radius", "4px")
+      .style("pointer-events", "none")
+      .style("opacity", 0);
+  }
+
+  // --- Draw bars ---
+  g.selectAll("g.series")
+    .data(series)
+    .enter()
+    .append("g")
+    .attr("fill", d => color(d.key))
+    .selectAll("rect")
+    .data(d => d)
+    .enter()
+    .append("rect")
+    .attr("y", d => y(d.data.gene))
+    .attr("x", d => x(d[0]))
+    .attr("width", d => x(d[1]) - x(d[0]))
+    .attr("height", y.bandwidth())
+    .on("mouseover", (event, d) => {
+      const activePathways = pathways.filter(k => d.data[k] > 0);
+      tooltip.transition().duration(100).style("opacity", 0.9);
+      tooltip.html(`<strong>${d.data.gene}</strong><br>Pathways: ${activePathways.join(", ")}`);
+    })
+    .on("mousemove", event => {
+      tooltip.style("left", (event.pageX + 10) + "px")
+             .style("top", (event.pageY - 20) + "px");
+    })
+    .on("mouseout", () => tooltip.transition().duration(200).style("opacity", 0));
+
+  // --- Axes ---
+  g.append("g").call(d3.axisLeft(y));
+  g.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x));
+
+  // --- Legend ---
+  const legend = svg.append("g")
+    .attr("transform", `translate(${margin.left}, 20)`);
+
+  pathways.forEach((p, i) => {
+    const gLeg = legend.append("g").attr("transform", `translate(${i * 120},0)`);
+    gLeg.append("rect").attr("width", 15).attr("height", 15).attr("fill", color(p));
+    gLeg.append("text").attr("x", 20).attr("y", 12).text(p);
+  });
+}
+
+
+
 // =====================================================
 //  MAIN RUN
 // =====================================================
@@ -526,6 +686,18 @@ async function run() {
     });
 
     const graph = convertToGraph(deduped, iriMap);
+    // Build a table from the global frequency
+    const barData = [];
+    for (const [gene, data] of globalFreq.entries()) {
+      const geneObj = { gene };
+      data.pathways.forEach(p => { geneObj[p] = 1 }); // each pathway = 1 count
+      barData.push(geneObj);
+    }
+
+    drawGeneFrequencyChart(barData);
+
+    
+    loadedPathways.add(pathwayId);
 
     // Optional hard-coded extra edges
     if (pathwayId === "WP17") {
@@ -547,6 +719,8 @@ async function run() {
     statusEl.textContent = " Error: " + e.message;
   }
 }
+
+
 
 // Run once on load
 run();

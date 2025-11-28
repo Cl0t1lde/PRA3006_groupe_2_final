@@ -111,3 +111,7 @@ tr.highlight {
   font-size: 10px;
   pointer-events: none;
 }
+
+.table-container h2 {
+  margin-top: 20px; /* separates the frequency table from the interactions table */
+}

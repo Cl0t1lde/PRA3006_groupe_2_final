@@ -36,28 +36,33 @@
     <span id="status">Ready.</span>
   </div>
 
-  <div class="layout">
-    <!-- LEFT: TABLE -->
-    <div class="table-container">
-      <h2>Interactions (unique, after merging)</h2>
-      <table id="resultsTable">
-        <thead>
-          <tr>
-            <th>Source</th>
-            <th>Target</th>
-            <th>Source link (WikiPathways IRI)</th>
-          </tr>
-        </thead>
-        <tbody id="resultsBody">
-          <!-- Filled by JavaScript -->
-        </tbody>
-      </table>
-    </div>
+  <div class="table-container">
+    <h2>Summary table of the interactions.</h2>
+    <table id="resultsTable">
+      <thead>
+        <tr>
+          <th>Source</th>
+          <th>Target</th>
+          <th>Source link (WikiPathways IRI)</th>
+        </tr>
+      </thead>
+      <tbody id="resultsBody">
+        <!-- Filled by JavaScript -->
+      </tbody>
+    </table>
+  
+    <!-- Frequency table -->
+    <h2>Gene Frequency Across Pathways (Stacked Bar)</h2>
+    <svg id="frequency-chart" width="700" height="400"></svg>
+  </div>
+  
 
     <!-- RIGHT: GRAPH -->
-    <div class="graph-container">
-      <svg id="graph" width="800" height="600"></svg>
-    </div>
+  <div class="graph-container">
+    <svg id="graph" width="800" height="600"></svg>
   </div>
+ 
+
+
 </body>
 </html>
