@@ -76,7 +76,7 @@ function normalizeLabel(label, nodeMap) {
 
   for (const [k] of nodeMap) { // looks at keys in the map (names )
     const min = Math.min(k.length, core.length); //Finds the shorter of the two strings
-    if (min >= 4 && (k.startsWith(core) || core.startsWith(k))) {//only consider matches if at least 3 characters long and the strings start with each other.
+    if (min >= 5 && (k.startsWith(core) || core.startsWith(k))) {//only consider matches if at least 3 characters long and the strings start with each other.
       key = k;//assign label 
       break;
     }
@@ -706,7 +706,7 @@ async function run() {
     // Optional hard-coded extra edges
     if (pathwayId === "WP17") {
       addCustomEdges(graph, [
-        { source: "PIP3", target: "Complex A" },
+        { source: "PIP", target: "Complex A" },
         { source: "PDK1", target: "Complex A" }, 
         { source: "Complex A", target: "DAF-16/FOXO"},
         { source: "DAF-16/FOXO", target: "Complex B"}
@@ -727,9 +727,9 @@ async function run() {
     } else if (pathwayId === "WP3958") {
       addCustomEdges(graph, [
         { source: "GPR40-GNA11", target: "Phospholipase C" },
-        { source: "Phospholipase C", target: "Diacylglycerol" }, 
-        { source: "Phospholipase C", target: "Inositol 3-phosphate"},
-        { source: "Inositol 3-phosphate", target: "IP3R"},
+        { source: "Phospholipase C", target: "DAG" }, 
+        { source: "Phospholipase C", target: "IP3"},
+        { source: "Ca2+ efflux", target: "Insulin exocytosis"},
         { source: "PKD1", target: "Unknown target genes"},
         { source: "Unknown target genes", target: "F-acting remodeling enables insulin exocytosis"},
         ], iriMap);
