@@ -761,5 +761,4 @@ async function run() {
 
 
 
-// Run once on load
-run();
+
