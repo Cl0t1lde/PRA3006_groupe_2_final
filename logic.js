@@ -649,6 +649,246 @@ function drawGeneFrequencyChart(barData) {
   });
 }
 
+async function getGpmlAsBindings(pathwayId, revision=0) {
+  //
+  // 1. Fetch JSON that contains the GPML inside data.pathway.gpml
+  //
+  const jsonURL = `https://webservice.wikipathways.org/getPathway?pwId=${pathwayId}&format=json&revision=${revision}`;
+  const json = await fetch(jsonURL).then(r => r.json());
+
+  const gpmlText = json.pathway.gpml;
+  console.log(gpmlText)
+  if (!gpmlText) throw new Error("GPML not found in JSON response");
+
+  //
+  // 2. Clean namespaces so DOMParser can read it simply
+  //
+  const cleanedXml = gpmlText
+    .replace(/xmlns(:\w+)?="[^"]+"/g, "")    // remove xmlns and xmlns:gpml
+    .replace(/gpml:/g, "");                 // remove gpml: prefixes
+
+  const parser = new DOMParser();
+  const xmlDoc = parser.parseFromString(cleanedXml, "application/xml");
+
+  return xmlDoc
+}
+
+
+function extractDataNodes(xmlDoc) {
+  const nodeEls = xmlDoc.getElementsByTagName("DataNode");
+  const nodeMap = {}; // graphId -> { id, label, uri, type, groupRef }
+  let autoIdCounter = 0;
+
+  for (let i = 0; i < nodeEls.length; i++) {
+    const el = nodeEls[i];
+    let id = el.getAttribute("GraphId");
+
+    if (!id) {
+      id = `auto_${autoIdCounter}`;
+      autoIdCounter += 1;
+    }
+
+    const label = el.getAttribute("TextLabel") || id;
+    const type = el.getAttribute("Type") || "DataNode";
+    const groupRef = el.getAttribute("GroupRef") || null;
+    console.log(groupRef, " + ", label, " + ", id)
+
+
+    // Xref: build identifiers.org URI if present
+    let uri = null;
+    const xref = el.getElementsByTagName("Xref")[0];
+    if (xref) {
+      const db = (xref.getAttribute("Database") || "").toLowerCase();
+      const entry = xref.getAttribute("ID");
+      if (db && entry) {
+        uri = `https://identifiers.org/${db}/${entry}`;
+      }
+    }
+
+    nodeMap[id] = { id, label, uri, type, groupRef };
+  }
+
+  return nodeMap;
+}
+
+function buildGroupsFromNodes(nodeMap, xmlDoc) {
+  const groups = {}; // groupId -> { id, members: [nodeIds], labels: [labels] }
+
+  // 1. First, build groups based on node.groupRef (your original logic)
+  Object.values(nodeMap).forEach(node => {
+    if (!node.groupRef) return;
+    const gid = node.groupRef;
+    if (!groups[gid]) groups[gid] = { id: gid, members: [], labels: [] };
+    groups[gid].members.push(node.id);
+    groups[gid].labels.push(node.label);
+  });
+
+  // 2. Now adjust group IDs based on <Group> elements in XML
+  xmlDoc.querySelectorAll("Group").forEach(g => {
+    const groupId = g.getAttribute("GroupId");
+    const graphId = g.getAttribute("GraphId");
+
+    // Only adjust if:
+    // - we already discovered this group from nodes
+    // - AND graphId exists
+    // - AND groupId != graphId
+    if (groups[groupId] && graphId && graphId !== groupId) {
+      groups[groupId].id = graphId;   // <- Replace ID with graphId
+    }
+  });
+
+  // 3. Build labels as before
+  Object.values(groups).forEach(g => {
+    g.label = g.labels.join(" / ");
+  });
+
+  return groups;
+}
+
+
+function extractInteractions(xmlDoc) {
+  const interactionEls = xmlDoc.getElementsByTagName("Interaction");
+  const interactions = [];
+
+  for (let i = 0; i < interactionEls.length; i++) {
+    const ie = interactionEls[i];
+    const interId = ie.getAttribute("GraphId") || `interaction_${i}`;
+    const pointEls = ie.getElementsByTagName("Point");
+    const pointRefs = [];
+    const arrowHeads = [];
+
+    for (let p = 0; p < pointEls.length; p++) {
+      const pe = pointEls[p];
+      pointRefs.push(pe.getAttribute("GraphRef") || null);
+      arrowHeads.push(pe.getAttribute("ArrowHead") || null);
+    }
+
+    interactions.push({ interactionId: interId, pointRefs, arrowHeads });
+  }
+
+  return interactions;
+}
+
+function collapseGroupsAndBuildBindings({
+  nodeMap,
+  groups,
+  interactions,
+  pathwayId,
+  revision,
+  pathwayTitle
+}) {
+  // create supernode records: map groupId -> supernode object
+  const supernodes = {};
+  Object.values(groups).forEach(g => {
+    const superId = `group_${g.id}`; // chosen unique id
+    const uri = `http://example.org/${superId}`; // or choose identifiers.org pattern
+    supernodes[g.id] = {
+      id: superId,
+      uri,
+      label: g.label,
+      members: g.members,
+      type: "http://vocabularies.wikipathways.org/wp#Group"
+    };
+  });
+
+  // helper to resolve an id (could be a node GraphId OR a group GraphId)
+  function resolveRef(ref) {
+    if (!ref) return null;
+    // If ref matches a nodeGraphId
+    if (nodeMap[ref]) return nodeMap[ref];
+    // If ref matches a group GraphId and we made a supernode
+    if (supernodes[ref]) return supernodes[ref];
+    // If ref looks like supernode id (rare), check that
+    // fallback null
+    return null;
+  }
+
+  const bindings = [];
+
+  interactions.forEach(inter => {
+    // For typical pairs we use first point as source, last point as target
+    const pts = inter.pointRefs.filter(Boolean);
+    if (pts.length < 2) return;
+
+    let sourceRef = pts[0];
+    let targetRef = pts[pts.length - 1];
+
+    // If sourceRef is a member with groupRef, use the group's supernode instead
+    if (nodeMap[sourceRef]?.groupRef && supernodes[nodeMap[sourceRef].groupRef]) {
+      sourceRef = nodeMap[sourceRef].groupRef; // group GraphId
+    }
+
+    if (nodeMap[targetRef]?.groupRef && supernodes[nodeMap[targetRef].groupRef]) {
+      targetRef = nodeMap[targetRef].groupRef;
+    }
+
+    const source = resolveRef(sourceRef);
+    const target = resolveRef(targetRef);
+    if (!source || !target) return;
+
+    // build actual URIs (prefer node.uri, otherwise use supernode.uri)
+    const sourceUri = source.uri || source.uri === null ? source.uri : source.id;
+    const targetUri = target.uri || target.uri === null ? target.uri : target.id;
+
+    const binding = {
+      interaction: {
+        type: "uri",
+        value: `http://rdf.wikipathways.org/Pathway/${pathwayId}_r${revision}/WP/Interaction/${inter.interactionId}`
+      },
+      interactionType: {
+        type: "uri",
+        value: "http://vocabularies.wikipathways.org/wp#DirectedInteraction"
+      },
+      pathwayTitle: {
+        type: "literal",
+        "xml:lang": "en",
+        value: pathwayTitle
+      },
+
+      source: { type: "uri", value: sourceUri || source.id },
+      sourceLabel: { type: "literal", value: source.label },
+      sourceType: { type: "uri", value: source.type },
+
+      target: { type: "uri", value: targetUri || target.id },
+      targetLabel: { type: "literal", value: target.label },
+      targetType: { type: "uri", value: target.type }
+    };
+
+    // attach group metadata optionally (if source or target is a supernode)
+    if (supernodes[sourceRef]) {
+      binding.sourceGroup = { type: "literal", value: sourceRef };
+      binding.sourceMembers = { type: "literal", value: supernodes[sourceRef].members.join(",") };
+    }
+    if (supernodes[targetRef]) {
+      binding.targetGroup = { type: "literal", value: targetRef };
+      binding.targetMembers = { type: "literal", value: supernodes[targetRef].members.join(",") };
+    }
+
+    bindings.push(binding);
+  });
+
+  return {
+    head: {
+      link: [],
+      vars: [
+        "interaction",
+        "interactionType",
+        "pathwayTitle",
+        "source",
+        "sourceLabel",
+        "sourceType",
+        "sourceGroup",
+        "sourceMembers",
+        "target",
+        "targetLabel",
+        "targetType",
+        "targetGroup",
+        "targetMembers"
+      ]
+    },
+    results: { bindings }
+  };
+}
 
 
 // =====================================================
@@ -666,6 +906,9 @@ async function run() {
   clearTable();
 
   try {
+    ////////////////////////////////
+    //  1. Fetch Query Results    //
+    ////////////////////////////////
     const headers = { Accept: "application/sparql-results+json" };
     const query = getQuery(pathwayId);
 
@@ -674,6 +917,30 @@ async function run() {
 
     const json = await res.json();
     pathwayTitle.textContent = json.results.bindings?.[0]?.pathwayTitle?.value ?? "No title";
+
+    ////////////////////////////////
+    //  2. Fetch QPML Results     //
+    ////////////////////////////////
+
+    const xmlDoc = await getGpmlAsBindings(pathwayId);
+    const nodeMap = extractDataNodes(xmlDoc);
+    const groups = buildGroupsFromNodes(nodeMap, xmlDoc);
+    const interactions = extractInteractions(xmlDoc);
+    const sparqlStyle = collapseGroupsAndBuildBindings({
+      nodeMap, groups, interactions,
+      pathwayId: "WP17", revision: "137452",
+      pathwayTitle: xmlDoc.documentElement.getAttribute("Name")
+    });
+
+    ////////////////////////////////
+    //  3. Merge Sparql + GPML    //
+    ////////////////////////////////
+
+    const mergedBindings = [
+        ...json.results.bindings,
+        ...sparqlStyle.results.bindings
+    ];
+    json.results.bindings = mergedBindings;
 
     // Deduplicate using Lionel's function
     const deduped = removeDuplicateInteractions3(json.results.bindings || []);
@@ -703,53 +970,6 @@ async function run() {
     
     loadedPathways.add(pathwayId);
 
-    // Optional hard-coded extra edges
-    if (pathwayId === "WP17") {
-      addCustomEdges(graph, [
-        { source: "PIP", target: "Complex A" },
-        { source: "PDK1", target: "Complex A" }, 
-        { source: "Complex A", target: "DAF-16/FOXO"},
-        { source: "DAF-16/FOXO", target: "Complex B"}
-      ], iriMap);
-    } else if (pathwayId === "WP3675") {
-      addCustomEdges(graph, [
-        { source: "ActRIIB", target: "SMAD Complex" },
-        { source: "SMAD Complex", target: "AKT1" }, 
-        { source: "SMAD Complex", target: "MTOR Complex"},
-        { source: "MTOR Complex", target: "S6K"},
-        { source: "MTOR Complex", target: "FoxO"},
-        { source: "PLD1", target: "MTOR Complex"},
-        { source: "AMPK", target: "MTOR Complex"},
-        { source: "Amino Acids", target: "MTOR Complex"},
-        { source: "AKT1", target: "MTOR Complex"},
-        { source: "IGF1", target: "IGF1rec"},
-      ], iriMap);
-    } else if (pathwayId === "WP3958") {
-      addCustomEdges(graph, [
-        { source: "GPR40-GNA11", target: "Phospholipase C" },
-        { source: "Phospholipase C", target: "DAG" }, 
-        { source: "Phospholipase C", target: "IP3"},
-        { source: "Ca2+ efflux", target: "Insulin exocytosis"},
-        { source: "PKD1", target: "Unknown target genes"},
-        { source: "Unknown target genes", target: "F-acting remodeling enables insulin exocytosis"},
-        ], iriMap);
-    }else if (pathwayId === "WP4229") {
-      addCustomEdges(graph, [
-        { source: "Mapk3", target: "TSC complex" },
-        { source: "Akt", target: "TSC complex" }, 
-        { source: "TSC Complex", target: "Rheb"},
-        { source: "Akt", target: "Akt1s1"},
-        { source: "Akt1s1", target: "mTOR complex"},
-        { source: "Rheb", target: "mTOR complex"},
-        { source: "mTOR complex", target: "4eBP"},
-        { source: "mTOR complex", target: "S6K"},
-        { source: "4eBP", target: "Eif4e"},
-        { source: "mTOR complex", target: "LARP1"},
-        { source: "mTOR complex", target: "Grb10"},
-        { source: "mTOR complex", target: "FoxK1"},
-        { source: "mTOR complex", target: "Ndrg1"},
-        ], iriMap);
-    }
     fillTableFromGraph(graph.tableRows);
     drawGraph(graph);
     statusEl.textContent = " Done.";
