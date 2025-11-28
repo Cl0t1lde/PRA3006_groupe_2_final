@@ -702,8 +702,8 @@ async function run() {
     // Optional hard-coded extra edges
     if (pathwayId === "WP17") {
       addCustomEdges(graph, [
-        { source: "PIP", target: "Complex A" },
-        { source: "PDK", target: "Complex A" }, 
+        { source: "PIP3", target: "Complex A" },
+        { source: "PDK1", target: "Complex A" }, 
         { source: "Complex A", target: "DAF-16/FOXO"},
         { source: "DAF-16/FOXO", target: "Complex B"}
       ], iriMap);
