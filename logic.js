@@ -104,8 +104,8 @@ WHERE {
 //  TABLE HANDLING
 // =====================================================
 function clearTable() {
-  const tbody = document.getElementById("resultsBody"); //fetch from the html the place for the table
-  if (tbody) tbody.innerHTML = ""; //if it finds it it clears it 
+  const tbody = document.getElementById("resultsBody");
+  if (tbody) tbody.innerHTML = "";
 }
 
 function fillTableFromGraph(tableRows) {
@@ -113,15 +113,15 @@ function fillTableFromGraph(tableRows) {
   if (!tbody) return;
 
   tableRows.forEach(row => {
-    const tr = document.createElement("tr"); //create a new objetc tr for each edges 
-    tr.dataset.sourceId = row.sourceId; //used for hihlighting edges
+    const tr = document.createElement("tr");
+    tr.dataset.sourceId = row.sourceId;
     tr.dataset.targetId = row.targetId;
 
     tr.innerHTML = `
       <td>${row.source}</td>
       <td>${row.target}</td>
       <td><a href="${row.url}" target="_blank" rel="noopener noreferrer">Link to source</a></td>
-    `;//create a new cell in the table to put source, target and url 
+    `;
     tbody.appendChild(tr);
   });
 }
@@ -269,15 +269,120 @@ function drawGraph(graph) {
 
   const nodesById = new Map(nodes.map(n => [n.id, n]));
 
-  // assign actual node objects to edges for D3
+  // --- indegree / adjacency / reverse adjacency ---
+  const indegree = new Map();
+  const adjacency = new Map();
+  const revAdj = new Map();
+
+  nodes.forEach(n => {
+    indegree.set(n.id, 0);
+    adjacency.set(n.id, []);
+    revAdj.set(n.id, []);
+  });
+
+  edges.forEach(e => {
+    if (!indegree.has(e.targetId)) indegree.set(e.targetId, 0);
+    indegree.set(e.targetId, (indegree.get(e.targetId) || 0) + 1);
+
+    if (!adjacency.has(e.sourceId)) adjacency.set(e.sourceId, []);
+    adjacency.get(e.sourceId).push(e.targetId);
+
+    if (!revAdj.has(e.targetId)) revAdj.set(e.targetId, []);
+    revAdj.get(e.targetId).push(e.sourceId);
+  });
+
+  // --- Longest-path style layering (with cycle fallback) ---
+  const layer = new Map();
+  nodes.forEach(n => layer.set(n.id, 0));
+
+  const in2 = new Map();
+  nodes.forEach(n => in2.set(n.id, indegree.get(n.id) || 0));
+
+  const queue = [];
+  const visited = new Set();
+
+  nodes.forEach(n => {
+    if ((in2.get(n.id) || 0) === 0) queue.push(n.id);
+  });
+  if (queue.length === 0) {
+    // no true sources (pure cycles); just pick all as starting points
+    nodes.forEach(n => queue.push(n.id));
+  }
+
+  while (queue.length) {
+    const u = queue.shift();
+    if (visited.has(u)) continue;
+    visited.add(u);
+
+    const baseLayer = layer.get(u) || 0;
+    const neigh = adjacency.get(u) || [];
+    neigh.forEach(v => {
+      const cur = layer.get(v) || 0;
+      const next = baseLayer + 1;
+      if (next > cur) layer.set(v, next);
+
+      in2.set(v, (in2.get(v) || 1) - 1);
+      if (in2.get(v) === 0 && !visited.has(v)) queue.push(v);
+    });
+  }
+
+  // nodes still unvisited: put them just below their predecessors (or at 0)
+  nodes.forEach(n => {
+    if (visited.has(n.id)) return;
+    const preds = revAdj.get(n.id) || [];
+    let maxPred = -1;
+    preds.forEach(p => {
+      const lp = layer.get(p);
+      if (lp != null && lp > maxPred) maxPred = lp;
+    });
+    if (maxPred >= 0) layer.set(n.id, maxPred + 1);
+    else layer.set(n.id, 0);
+  });
+
+  // --- group nodes by layer ---
+  let maxLayer = 0;
+  layer.forEach(v => {
+    if (v > maxLayer) maxLayer = v;
+  });
+
+  const layerNodes = [];
+  for (let i = 0; i <= maxLayer; i++) layerNodes.push([]);
+  nodes.forEach(n => {
+    const l = layer.get(n.id) || 0;
+    if (!layerNodes[l]) layerNodes[l] = [];
+    layerNodes[l].push(n);
+  });
+
+  // --- node radius: shrink automatically if a layer is very crowded ---
+  const marginX = 40;
+  const marginY = 40;
+
+  let maxPerLayer = 0;
+  layerNodes.forEach(ln => {
+    if (ln && ln.length > maxPerLayer) maxPerLayer = ln.length;
+  });
+  const stepXmin = (width - 2 * marginX) / ((maxPerLayer + 1) || 1);
+  const nodeRadius = Math.max(4, Math.min(15, stepXmin * 0.4));
+
+  const stepY = (height - 2 * marginY) / Math.max(1, maxLayer || 1);
+
+  // assign coordinates
+  layerNodes.forEach((ln, i) => {
+    if (!ln || !ln.length) return;
+    const stepX = (width - 2 * marginX) / (ln.length + 1);
+    ln.forEach((n, j) => {
+      n.x = marginX + stepX * (j + 1);
+      n.y = marginY + stepY * i;
+    });
+  });
+
+  // --- convert edges to D3-friendly objects (source/target = node objects) ---
   edges.forEach(e => {
     e.source = nodesById.get(e.sourceId);
     e.target = nodesById.get(e.targetId);
   });
 
-  clearGraph(); // remove old elements
-
-  // --- arrow marker ---
+  // --- draw ---
   svg.append("defs")
     .append("marker")
     .attr("id", "arrow")
@@ -291,14 +396,6 @@ function drawGraph(graph) {
     .attr("d", "M 0 0 L 10 5 L 0 10 z")
     .attr("fill", "#555");
 
-  // --- force simulation ---
-  const simulation = d3.forceSimulation(nodes)
-    .force("link", d3.forceLink(edges).id(d => d.id).distance(100))
-    .force("charge", d3.forceManyBody().strength(-300))
-    .force("center", d3.forceCenter(width / 2, height / 2))
-    .force("collision", d3.forceCollide().radius(20));
-
-  // --- links ---
   const link = svg.append("g")
     .attr("class", "links")
     .selectAll("line")
@@ -308,53 +405,44 @@ function drawGraph(graph) {
     .attr("class", "link")
     .attr("marker-end", "url(#arrow)");
 
-  // --- nodes ---
   const node = svg.append("g")
     .attr("class", "nodes")
     .selectAll("g")
     .data(nodes)
     .enter()
     .append("g")
-    .attr("class", "node")
-    .call(d3.drag()
-      .on("start", (event, d) => {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
-        d.fx = d.x;
-        d.fy = d.y;
-      })
-      .on("drag", (event, d) => {
-        d.fx = event.x;
-        d.fy = event.y;
-      })
-      .on("end", (event, d) => {
-        if (!event.active) simulation.alphaTarget(0);
-        d.fx = null;
-        d.fy = null;
-      })
-    );
+    .attr("class", "node");
 
-  node.append("circle")
-    .attr("r", 10);
-
+  node.append("circle").attr("r", nodeRadius);
   node.append("text")
-    .attr("x", 12)
+    .attr("x", nodeRadius + 3)
     .attr("y", 3)
     .text(d => d.label);
 
   link.append("title")
     .text(d => (d.label || "Interaction") + (d.type ? ` (${d.type})` : ""));
 
-  node.on("click", (e, d) => highlightRowsForNode(d.id));
-
-  simulation.on("tick", () => {
+  function updatePositions() {
     link
       .attr("x1", d => d.source.x)
       .attr("y1", d => d.source.y)
-      .attr("x2", d => d.target.x)
-      .attr("y2", d => d.target.y);
+      .attr("x2", d => shiftedTarget(d, nodeRadius + 5).x)
+      .attr("y2", d => shiftedTarget(d, nodeRadius + 5).y);
 
     node.attr("transform", d => `translate(${d.x},${d.y})`);
-  });
+  }
+
+  node.on("click", (e, d) => highlightRowsForNode(d.id));
+  updatePositions();
+
+  node.call(
+    d3.drag()
+      .on("drag", (e, d) => {
+        d.x = e.x;
+        d.y = e.y;
+        updatePositions();
+      })
+  );
 }
 
 
@@ -481,41 +569,42 @@ async function getGpmlAsBindings(pathwayId, revision=0) {
 }
 
 
-function extractDataNodes(xmlDoc) {
-  const nodeEls = xmlDoc.getElementsByTagName("DataNode");
-  const nodeMap = {}; // graphId -> { id, label, uri, type, groupRef }
-  let autoIdCounter = 0;
+function extractDataNodes(xmlDoc) {                       // Takes an XML document and pulls info from all <DataNode> elements
+  const nodeEls = xmlDoc.getElementsByTagName("DataNode"); // All <DataNode> elements in the XML
+  const nodeMap = {};                                      // Object where we store node info, keyed by ID
+  let autoIdCounter = 0;                                   // Counter to create IDs when a node has none
 
-  for (let i = 0; i < nodeEls.length; i++) {
-    const el = nodeEls[i];
-    let id = el.getAttribute("GraphId");
+  for (let i = 0; i < nodeEls.length; i++) {               // Go through each DataNode one by one
+    const el = nodeEls[i];                                 // The current DataNode element
+    let id = el.getAttribute("GraphId");                   // Try to read its "GraphId" attribute
 
-    if (!id) {
-      id = `auto_${autoIdCounter}`;
-      autoIdCounter += 1;
+    if (!id) {                                             // If there is no GraphId
+      id = `auto_${autoIdCounter}`;                        // Make up an ID like "auto_0", "auto_1", ...
+      autoIdCounter += 1;                                  // Increase the counter for the next one
     }
 
-    const label = el.getAttribute("TextLabel") || id;
-    const type = el.getAttribute("Type") || "DataNode";
-    const groupRef = el.getAttribute("GroupRef") || null;
-    console.log(groupRef, " + ", label, " + ", id)
+    const label = el.getAttribute("TextLabel") || id;      // Use "TextLabel" as display name, or fall back to id
+    const type = el.getAttribute("Type") || "DataNode";    // Use "Type" if present, otherwise "DataNode"
+    const groupRef = el.getAttribute("GroupRef") || null;  // Group reference if present, otherwise null
+    console.log(groupRef, " + ", label, " + ", id);        // Log some info to the console for debugging
 
+    let uri = null;                                        // Start with no external link (URI) yet
+    const xref = el.getElementsByTagName("Xref")[0];       // Look for the first <Xref> child element
 
-    // Xref: build identifiers.org URI if present
-    let uri = null;
-    const xref = el.getElementsByTagName("Xref")[0];
-    if (xref) {
-      const db = (xref.getAttribute("Database") || "").toLowerCase();
-      const entry = xref.getAttribute("ID");
-      if (db && entry) {
-        uri = `https://identifiers.org/${db}/${entry}`;
+    if (xref) {                                            // If an <Xref> exists
+      const db = (xref.getAttribute("Database") || "")     // Read "Database" name (e.g. uniprot)
+        .toLowerCase();                                    // Make it lowercase for consistency
+      const entry = xref.getAttribute("ID");               // Read the database entry ID
+
+      if (db && entry) {                                   // Only if we have both a database and an ID
+        uri = `https://identifiers.org/${db}/${entry}`;    // Build a full URL like https://identifiers.org/db/ID
       }
     }
 
-    nodeMap[id] = { id, label, uri, type, groupRef };
+    nodeMap[id] = { id, label, uri, type, groupRef };      // Store all collected info under this node’s ID
   }
 
-  return nodeMap;
+  return nodeMap;                                          // Give back the object with all nodes and their info
 }
 
 function buildGroupsFromNodes(nodeMap, xmlDoc) {
@@ -553,27 +642,27 @@ function buildGroupsFromNodes(nodeMap, xmlDoc) {
 }
 
 
-function extractInteractions(xmlDoc) {
-  const interactionEls = xmlDoc.getElementsByTagName("Interaction");
-  const interactions = [];
+function extractInteractions(xmlDoc) {                                   // Takes an XML document and reads all <Interaction> elements
+  const interactionEls = xmlDoc.getElementsByTagName("Interaction");    // All <Interaction> elements in the XML
+  const interactions = [];                                              // Array where we will store interaction info
 
-  for (let i = 0; i < interactionEls.length; i++) {
-    const ie = interactionEls[i];
-    const interId = ie.getAttribute("GraphId") || `interaction_${i}`;
-    const pointEls = ie.getElementsByTagName("Point");
-    const pointRefs = [];
-    const arrowHeads = [];
+  for (let i = 0; i < interactionEls.length; i++) {                     // Go through each Interaction one by one
+    const ie = interactionEls[i];                                       // Current Interaction element
+    const interId = ie.getAttribute("GraphId") || `interaction_${i}`;   // Use its GraphId, or make one like "interaction_0"
+    const pointEls = ie.getElementsByTagName("Point");                  // All <Point> elements inside this interaction
+    const pointRefs = [];                                               // Will hold references to nodes this interaction touches
+    const arrowHeads = [];                                              // Will hold arrow shapes/directions for each point
 
-    for (let p = 0; p < pointEls.length; p++) {
-      const pe = pointEls[p];
-      pointRefs.push(pe.getAttribute("GraphRef") || null);
-      arrowHeads.push(pe.getAttribute("ArrowHead") || null);
+    for (let p = 0; p < pointEls.length; p++) {                         // Loop through each Point in this interaction
+      const pe = pointEls[p];                                           // Current Point element
+      pointRefs.push(pe.getAttribute("GraphRef") || null);              // Save which node this point is connected to (or null)
+      arrowHeads.push(pe.getAttribute("ArrowHead") || null);            // Save arrow type at this point (or null)
     }
 
-    interactions.push({ interactionId: interId, pointRefs, arrowHeads });
+    interactions.push({ interactionId: interId, pointRefs, arrowHeads });// Store everything for this interaction in the array
   }
 
-  return interactions;
+  return interactions;                                                  // Give back the list of all interactions
 }
 
 function collapseGroupsAndBuildBindings({
@@ -785,3 +874,8 @@ async function run() {
     statusEl.textContent = " Error: " + e.message;
   }
 }
+
+
+
+
+
