@@ -481,41 +481,6 @@ function drawGraph(graph) {
 // =====================================================
 //  CUSTOM EDGES (same idea as original)
 // =====================================================
-function addCustomEdges(graph, edges, labelToIri) {
-  edges.forEach(edge => {
-    function getNode(label) {
-      const nodeMap = new Map(graph.nodes.map(n => [n.id, n]));
-      const n = normalizeLabel(label, nodeMap);
-      let node = graph.nodes.find(g => g.id === n.key);
-      if (!node) {
-        node = { id: n.key, label: n.label };
-        graph.nodes.push(node);
-      } else {
-        node.label = n.label;
-      }
-      return node;
-    }
-
-    const sNode = getNode(edge.source);
-    const tNode = getNode(edge.target);
-
-    graph.links.push({
-      source: sNode.id,
-      target: tNode.id,
-      label: "custom",
-      type: "custom"
-    });
-
-    const iri = labelToIri.get(sNode.label) || "#";
-    graph.tableRows.push({
-      source: sNode.label,
-      target: tNode.label,
-      url: iri,
-      sourceId: sNode.id,
-      targetId: tNode.id
-    });
-  });
-}
 
 function drawGeneFrequencyChart(barData) {
   // --- Gather all pathways dynamically ---
