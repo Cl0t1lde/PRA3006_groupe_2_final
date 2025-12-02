@@ -569,41 +569,42 @@ async function getGpmlAsBindings(pathwayId, revision=0) {
 }
 
 
-function extractDataNodes(xmlDoc) {
-  const nodeEls = xmlDoc.getElementsByTagName("DataNode");
-  const nodeMap = {}; // graphId -> { id, label, uri, type, groupRef }
-  let autoIdCounter = 0;
+function extractDataNodes(xmlDoc) {                       // Takes an XML document and pulls info from all <DataNode> elements
+  const nodeEls = xmlDoc.getElementsByTagName("DataNode"); // All <DataNode> elements in the XML
+  const nodeMap = {};                                      // Object where we store node info, keyed by ID
+  let autoIdCounter = 0;                                   // Counter to create IDs when a node has none
 
-  for (let i = 0; i < nodeEls.length; i++) {
-    const el = nodeEls[i];
-    let id = el.getAttribute("GraphId");
+  for (let i = 0; i < nodeEls.length; i++) {               // Go through each DataNode one by one
+    const el = nodeEls[i];                                 // The current DataNode element
+    let id = el.getAttribute("GraphId");                   // Try to read its "GraphId" attribute
 
-    if (!id) {
-      id = `auto_${autoIdCounter}`;
-      autoIdCounter += 1;
+    if (!id) {                                             // If there is no GraphId
+      id = `auto_${autoIdCounter}`;                        // Make up an ID like "auto_0", "auto_1", ...
+      autoIdCounter += 1;                                  // Increase the counter for the next one
     }
 
-    const label = el.getAttribute("TextLabel") || id;
-    const type = el.getAttribute("Type") || "DataNode";
-    const groupRef = el.getAttribute("GroupRef") || null;
-    console.log(groupRef, " + ", label, " + ", id)
+    const label = el.getAttribute("TextLabel") || id;      // Use "TextLabel" as display name, or fall back to id
+    const type = el.getAttribute("Type") || "DataNode";    // Use "Type" if present, otherwise "DataNode"
+    const groupRef = el.getAttribute("GroupRef") || null;  // Group reference if present, otherwise null
+    console.log(groupRef, " + ", label, " + ", id);        // Log some info to the console for debugging
 
+    let uri = null;                                        // Start with no external link (URI) yet
+    const xref = el.getElementsByTagName("Xref")[0];       // Look for the first <Xref> child element
 
-    // Xref: build identifiers.org URI if present
-    let uri = null;
-    const xref = el.getElementsByTagName("Xref")[0];
-    if (xref) {
-      const db = (xref.getAttribute("Database") || "").toLowerCase();
-      const entry = xref.getAttribute("ID");
-      if (db && entry) {
-        uri = `https://identifiers.org/${db}/${entry}`;
+    if (xref) {                                            // If an <Xref> exists
+      const db = (xref.getAttribute("Database") || "")     // Read "Database" name (e.g. uniprot)
+        .toLowerCase();                                    // Make it lowercase for consistency
+      const entry = xref.getAttribute("ID");               // Read the database entry ID
+
+      if (db && entry) {                                   // Only if we have both a database and an ID
+        uri = `https://identifiers.org/${db}/${entry}`;    // Build a full URL like https://identifiers.org/db/ID
       }
     }
 
-    nodeMap[id] = { id, label, uri, type, groupRef };
+    nodeMap[id] = { id, label, uri, type, groupRef };      // Store all collected info under this node’s ID
   }
 
-  return nodeMap;
+  return nodeMap;                                          // Give back the object with all nodes and their info
 }
 
 function buildGroupsFromNodes(nodeMap, xmlDoc) {
@@ -641,27 +642,27 @@ function buildGroupsFromNodes(nodeMap, xmlDoc) {
 }
 
 
-function extractInteractions(xmlDoc) {
-  const interactionEls = xmlDoc.getElementsByTagName("Interaction");
-  const interactions = [];
+function extractInteractions(xmlDoc) {                                   // Takes an XML document and reads all <Interaction> elements
+  const interactionEls = xmlDoc.getElementsByTagName("Interaction");    // All <Interaction> elements in the XML
+  const interactions = [];                                              // Array where we will store interaction info
 
-  for (let i = 0; i < interactionEls.length; i++) {
-    const ie = interactionEls[i];
-    const interId = ie.getAttribute("GraphId") || `interaction_${i}`;
-    const pointEls = ie.getElementsByTagName("Point");
-    const pointRefs = [];
-    const arrowHeads = [];
+  for (let i = 0; i < interactionEls.length; i++) {                     // Go through each Interaction one by one
+    const ie = interactionEls[i];                                       // Current Interaction element
+    const interId = ie.getAttribute("GraphId") || `interaction_${i}`;   // Use its GraphId, or make one like "interaction_0"
+    const pointEls = ie.getElementsByTagName("Point");                  // All <Point> elements inside this interaction
+    const pointRefs = [];                                               // Will hold references to nodes this interaction touches
+    const arrowHeads = [];                                              // Will hold arrow shapes/directions for each point
 
-    for (let p = 0; p < pointEls.length; p++) {
-      const pe = pointEls[p];
-      pointRefs.push(pe.getAttribute("GraphRef") || null);
-      arrowHeads.push(pe.getAttribute("ArrowHead") || null);
+    for (let p = 0; p < pointEls.length; p++) {                         // Loop through each Point in this interaction
+      const pe = pointEls[p];                                           // Current Point element
+      pointRefs.push(pe.getAttribute("GraphRef") || null);              // Save which node this point is connected to (or null)
+      arrowHeads.push(pe.getAttribute("ArrowHead") || null);            // Save arrow type at this point (or null)
     }
 
-    interactions.push({ interactionId: interId, pointRefs, arrowHeads });
+    interactions.push({ interactionId: interId, pointRefs, arrowHeads });// Store everything for this interaction in the array
   }
 
-  return interactions;
+  return interactions;                                                  // Give back the list of all interactions
 }
 
 function collapseGroupsAndBuildBindings({
@@ -873,6 +874,7 @@ async function run() {
     statusEl.textContent = " Error: " + e.message;
   }
 }
+
 
 
 
