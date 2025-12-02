@@ -62,38 +62,6 @@ function removeDuplicateInteractions3(rows) {
   return result;
 }
 
-// =====================================================
-//  LABEL NORMALIZATION
-// =====================================================
-function normalizeLabel(label, nodeMap) {
-  const clean = label.trim().toUpperCase().replace(/[^A-Z0-9/]/g, "");//removes whitespace, converts to uppercase, removes all non-alphanumeric characters (appart from "/")
-  const core0 = clean.split("/")[0]; //take the first part of the label separreted by /
-  let key = core0;
-
-  for (const [k] of nodeMap) { // looks at keys in the map (names )
-    const min = Math.min(k.length, core0.length); //Finds the shorter of the two strings
-    if (min >= 5 && (k.startsWith(core0) || core0.startsWith(k))) {//only consider matches if at least 3 characters long and the strings start with each other.
-      key = k;//assign label 
-      break;
-    }
-  }
-
-  const existing = nodeMap.get(key);
-  if (!existing) return { key, label };
-
-  const cleanExisting = existing.label.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const extraCur = cleanExisting.startsWith(core0) ? cleanExisting.slice(core0.length) : "";
-  const extraNew = clean.startsWith(core0) ? clean.slice(core0.length) : "";
-  const curNum = /^[0-9]+$/.test(extraCur);
-  const newNum = /^[0-9]+$/.test(extraNew);
-
-  let better = existing.label;
-  if (!extraCur && newNum) better = existing.label;
-  else if (!extraNew && curNum) better = label;
-  else better = label.length > existing.label.length ? label : existing.label;
-
-  return { key, label: better };
-}
 
 // =====================================================
 //  SPARQL QUERY (new one from lionel.js)
@@ -183,16 +151,17 @@ function convertToGraph(rows, labelToIri) {
 
 
   function getNode(label) {
-    const n = normalizeLabel(label, nodeMap);
-    let node = nodeMap.get(n.key);
+    const key = label.trim(); // use raw label as unique key
+    let node = nodeMap.get(key);
+  
     if (!node) {
-      node = { id: n.key, label: n.label };
-      nodeMap.set(n.key, node);
-    } else {
-      node.label = n.label;
+      node = { id: key, label: label };
+      nodeMap.set(key, node);
     }
+  
     return node;
   }
+  
 
   rows.forEach(r => {
     if (!r.sourceLabel || !r.targetLabel) return;
@@ -478,9 +447,6 @@ function drawGraph(graph) {
   );
 }
 
-// =====================================================
-//  CUSTOM EDGES (same idea as original)
-// =====================================================
 
 function drawGeneFrequencyChart(barData) {
   // --- Gather all pathways dynamically ---
