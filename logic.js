@@ -35,9 +35,9 @@ function removeDuplicateInteractions3(rows) {
       canonicalLabel.set(src, srcLabel);  //if not yet in the list then add it 
     }
     if (!canonicalLabel.has(src)) {
-      canonicalLabel.set(src, src); // fallback
+      canonicalLabel.set(src, src); // fallback: use uri if no srcLabel is defined
     }
-    srcLabel = canonicalLabel.get(src); // Get a consistent label for src: use human-readable if available, otherwise fallback to the URI
+    srcLabel = canonicalLabel.get(src); // assign srclabel to the consistent labels from canonicalLabel
 
     // canonicalize target
     if (!canonicalLabel.has(tgt) && tgtLabel) {
@@ -50,13 +50,13 @@ function removeDuplicateInteractions3(rows) {
 
     // deduplicate edge
     const edgeKey = src + "||" + tgt; //define a source target pair ID 
-    if (seenEdges.has(edgeKey)) return; // check if pair ID is not yet in the list
+    if (seenEdges.has(edgeKey)) return; // check if pair ID is not yet in the list, if it is skip
     seenEdges.add(edgeKey); //add the iD to the list 
-    result.push({ //clean duplicate version of the original row
+    result.push({ // Add a cleaned, deduplicated version of the row to the results
       ...inter,
       sourceLabel: { value: srcLabel },
       targetLabel: { value: tgtLabel }
-    });
+    });// Recreate a new interaction with canonical labels
   });
 
   return result;
@@ -789,6 +789,7 @@ async function run() {
     statusEl.textContent = " Error: " + e.message;
   }
 }
+
 
 
 
