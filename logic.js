@@ -1,8 +1,5 @@
 const endpoint = "https://sparql.wikipathways.org/sparql";
-const aliasMap = {
-  "CDK2": "CyclinDependentKinase2",
-  "AKT-1": "AKT1"
-};
+
 // GLOBAL accumulation
 const globalFreq = new Map();         // gene → { count, pathways:Set }
 const loadedPathways = new Set();     // pathways we've already counted
@@ -66,17 +63,16 @@ function removeDuplicateInteractions3(rows) {
 }
 
 // =====================================================
-//  LABEL NORMALIZATION (from original chat.js)
+//  LABEL NORMALIZATION
 // =====================================================
 function normalizeLabel(label, nodeMap) {
   const clean = label.trim().toUpperCase().replace(/[^A-Z0-9/]/g, "");//removes whitespace, converts to uppercase, removes all non-alphanumeric characters (appart from "/")
   const core0 = clean.split("/")[0]; //take the first part of the label separreted by /
-  const core = aliasMap[core0] || core0; //define the name as either core0 or from the alias map
-  let key = core;
+  let key = core0;
 
   for (const [k] of nodeMap) { // looks at keys in the map (names )
-    const min = Math.min(k.length, core.length); //Finds the shorter of the two strings
-    if (min >= 5 && (k.startsWith(core) || core.startsWith(k))) {//only consider matches if at least 3 characters long and the strings start with each other.
+    const min = Math.min(k.length, core0.length); //Finds the shorter of the two strings
+    if (min >= 5 && (k.startsWith(core0) || core0.startsWith(k))) {//only consider matches if at least 3 characters long and the strings start with each other.
       key = k;//assign label 
       break;
     }
@@ -86,8 +82,8 @@ function normalizeLabel(label, nodeMap) {
   if (!existing) return { key, label };
 
   const cleanExisting = existing.label.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const extraCur = cleanExisting.startsWith(core) ? cleanExisting.slice(core.length) : "";
-  const extraNew = clean.startsWith(core) ? clean.slice(core.length) : "";
+  const extraCur = cleanExisting.startsWith(core0) ? cleanExisting.slice(core0.length) : "";
+  const extraNew = clean.startsWith(core0) ? clean.slice(core0.length) : "";
   const curNum = /^[0-9]+$/.test(extraCur);
   const newNum = /^[0-9]+$/.test(extraNew);
 
@@ -519,36 +515,6 @@ function addCustomEdges(graph, edges, labelToIri) {
       targetId: tNode.id
     });
   });
-}
-
-function renderFrequencyTable(freqTable) {
-  const container = document.getElementById("frequency-table");
-  if (!container) return;
-
-  let html = `
-    <table border="1" cellpadding="4" cellspacing="0">
-      <thead>
-        <tr>
-          <th>Gene</th>
-          <th>Count</th>
-          <th>Pathways</th>
-        </tr>
-      </thead>
-      <tbody>
-  `;
-
-  for (const row of freqTable) {
-    html += `
-      <tr>
-        <td>${row.gene}</td>
-        <td>${row.count}</td>
-        <td>${row.pathways.join(", ")}</td>
-      </tr>
-    `;
-  }
-
-  html += "</tbody></table>";
-  container.innerHTML = html;
 }
 
 function drawGeneFrequencyChart(barData) {

@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <title>Pathway Viewer</title>
-  <link rel="stylesheet" href="chat.css" />
+  <link rel="stylesheet" href="style.css" />
   <!-- D3.js -->
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <!-- Your script (runs after HTML is loaded) -->
-  <script defer src="chat.js"></script>
+  <script defer src="logic.js"></script>
 </head>
 
 <body>
@@ -17,18 +17,6 @@
     <span id="pathwayTitle">---</span>
   </h1>
 
-  <style>
-    /* Make the frequency chart scrollable */
-    #frequency-chart-wrapper {
-      width: 730px;
-      height: 400px;
-      overflow-y: auto; /* vertical scroll */
-      border: 1px solid #ccc;
-    }
-    #frequency-chart {
-      display: block;
-    }
-  </style>
   
   <p>
     This page loads pathways from WikiPathways (e.g. <strong>WP17</strong>,
