@@ -12,6 +12,7 @@
 - l.stijns@student.maastrichtuniversity.nl
 - s.vincenzetti@student.maastrichtuniversity.nl
 
+## Description:
 
 This project aims at visualising different pathways involved in types I diabetes.
 
