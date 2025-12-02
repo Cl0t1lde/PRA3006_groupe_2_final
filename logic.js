@@ -15,7 +15,7 @@ const pathwaySelect = document.getElementById("pathwaySelect");
 const pathwayLabel = document.getElementById("pathwayLabel");
 
 // =====================================================
-//  DEDUPLICATION (from lionel.js)
+//  DEDUPLICATION 
 // =====================================================
 function removeDuplicateInteractions3(rows) {
   const seenEdges = new Set();       // stores the edges to avoid duplicates
@@ -64,7 +64,7 @@ function removeDuplicateInteractions3(rows) {
 
 
 // =====================================================
-//  SPARQL QUERY (new one from lionel.js)
+//  SPARQL QUERY 
 // =====================================================
 function getQuery(pathwayID) {
   return `
@@ -104,36 +104,38 @@ WHERE {
 //  TABLE HANDLING
 // =====================================================
 function clearTable() {
-  const tbody = document.getElementById("resultsBody");
-  if (tbody) tbody.innerHTML = "";
+  const tbody = document.getElementById("resultsBody"); //Get the table body element from the HTML
+  if (tbody) tbody.innerHTML = ""; //if found clear the table
 }
 
 function fillTableFromGraph(tableRows) {
-  const tbody = document.getElementById("resultsBody");
-  if (!tbody) return;
+  const tbody = document.getElementById("resultsBody"); //Get the table body from the HTML
+  if (!tbody) return; //if table not found stop the code 
 
-  tableRows.forEach(row => {
-    const tr = document.createElement("tr");
-    tr.dataset.sourceId = row.sourceId;
+  tableRows.forEach(row => { //create the table cell from each row 
+    const tr = document.createElement("tr"); //create a table row
+    tr.dataset.sourceId = row.sourceId; //Associates the source and target IDs with this table row using HTML data attributes
     tr.dataset.targetId = row.targetId;
-
+    
+    //the HTML inside tr 
+    //fill in the row with a source, target and a link
     tr.innerHTML = `
       <td>${row.source}</td>
       <td>${row.target}</td>
       <td><a href="${row.url}" target="_blank" rel="noopener noreferrer">Link to source</a></td>
     `;
-    tbody.appendChild(tr);
+    tbody.appendChild(tr); //add each completed row successively 
   });
 }
 
 function highlightRowsForNode(nodeId) {
-  const tbody = document.getElementById("resultsBody");
-  if (!tbody) return;
+  const tbody = document.getElementById("resultsBody"); //Get the table body from the HTML
+  if (!tbody) return; //if table not found stop the code 
 
-  tbody.querySelectorAll("tr").forEach(tr => {
-    tr.classList.remove("highlight");
-    if (tr.dataset.sourceId === nodeId) {
-      tr.classList.add("highlight");
+  tbody.querySelectorAll("tr").forEach(tr => { //select all the table rows and loop trough them.
+    tr.classList.remove("highlight"); //first remove any potential previous highlight 
+    if (tr.dataset.sourceId === nodeId) { //check if the sourceID in the atribute correspond to the clicked node.
+      tr.classList.add("highlight"); //highlight the row if it match (add the "highlight class"
     }
   });
 }
@@ -787,6 +789,7 @@ async function run() {
     statusEl.textContent = " Error: " + e.message;
   }
 }
+
 
 
 
