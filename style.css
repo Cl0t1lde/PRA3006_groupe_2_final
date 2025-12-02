@@ -370,3 +370,14 @@ strong {
 em {
   color: var(--accent);
 }
+
+
+#frequency-chart-wrapper {
+      width: 730px;
+      height: 400px;
+      overflow-y: auto; /* vertical scroll */
+      border: 1px solid #ccc;
+    }
+    #frequency-chart {
+      display: block;
+    }
