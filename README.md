@@ -6,6 +6,12 @@
 - Lionel Stijns
 - Saverio Vincenzetti
 
+**Contact:**
+- a.ariassanchez@student.maastrichtuniversity.nl
+- c.papot@student.maastrichtuniversity.nl
+- l.stijns@student.maastrichtuniversity.nl
+- s.vincenzetti@student.maastrichtuniversity.nl
+
 
 This project aims at visualising different pathways involved in types I diabetes.
 
