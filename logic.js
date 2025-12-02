@@ -152,13 +152,13 @@ function convertToGraph(rows, labelToIri) {
   const currentPathway = pathwaySelect.value || "UNKNOWN";
 
 
-  function getNode(label) {
-    const key = label.trim(); // use raw label as unique key
-    let node = nodeMap.get(key);
+  function getNode(label) { // Ensure each label corresponds to a unique node object in nodeMap
+    const key = label.trim().toLowerCase(); //trim the label and put it in lowercase to normalise it in some way.
+    let node = nodeMap.get(key); //look for the node associeted to that key in the map
   
-    if (!node) {
-      node = { id: key, label: label };
-      nodeMap.set(key, node);
+    if (!node) { //if no node for that key yet
+      node = { id: key, label: label }; // create a new node object with normalized id and original label
+      nodeMap.set(key, node); // Store the new node object in nodeMap for future lookups
     }
   
     return node;
@@ -789,6 +789,7 @@ async function run() {
     statusEl.textContent = " Error: " + e.message;
   }
 }
+
 
 
 
