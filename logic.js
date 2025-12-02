@@ -254,8 +254,6 @@ function drawGraph(graph) {
   const nodes = graph.nodes;
   const rawLinks = graph.links;
 
-  svg.selectAll("*").remove();
-
   if (!nodes || nodes.length === 0) {
     statusEl.textContent = " No interactions found for this pathway.";
     return;
