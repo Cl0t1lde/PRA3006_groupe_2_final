@@ -269,120 +269,15 @@ function drawGraph(graph) {
 
   const nodesById = new Map(nodes.map(n => [n.id, n]));
 
-  // --- indegree / adjacency / reverse adjacency ---
-  const indegree = new Map();
-  const adjacency = new Map();
-  const revAdj = new Map();
-
-  nodes.forEach(n => {
-    indegree.set(n.id, 0);
-    adjacency.set(n.id, []);
-    revAdj.set(n.id, []);
-  });
-
-  edges.forEach(e => {
-    if (!indegree.has(e.targetId)) indegree.set(e.targetId, 0);
-    indegree.set(e.targetId, (indegree.get(e.targetId) || 0) + 1);
-
-    if (!adjacency.has(e.sourceId)) adjacency.set(e.sourceId, []);
-    adjacency.get(e.sourceId).push(e.targetId);
-
-    if (!revAdj.has(e.targetId)) revAdj.set(e.targetId, []);
-    revAdj.get(e.targetId).push(e.sourceId);
-  });
-
-  // --- Longest-path style layering (with cycle fallback) ---
-  const layer = new Map();
-  nodes.forEach(n => layer.set(n.id, 0));
-
-  const in2 = new Map();
-  nodes.forEach(n => in2.set(n.id, indegree.get(n.id) || 0));
-
-  const queue = [];
-  const visited = new Set();
-
-  nodes.forEach(n => {
-    if ((in2.get(n.id) || 0) === 0) queue.push(n.id);
-  });
-  if (queue.length === 0) {
-    // no true sources (pure cycles); just pick all as starting points
-    nodes.forEach(n => queue.push(n.id));
-  }
-
-  while (queue.length) {
-    const u = queue.shift();
-    if (visited.has(u)) continue;
-    visited.add(u);
-
-    const baseLayer = layer.get(u) || 0;
-    const neigh = adjacency.get(u) || [];
-    neigh.forEach(v => {
-      const cur = layer.get(v) || 0;
-      const next = baseLayer + 1;
-      if (next > cur) layer.set(v, next);
-
-      in2.set(v, (in2.get(v) || 1) - 1);
-      if (in2.get(v) === 0 && !visited.has(v)) queue.push(v);
-    });
-  }
-
-  // nodes still unvisited: put them just below their predecessors (or at 0)
-  nodes.forEach(n => {
-    if (visited.has(n.id)) return;
-    const preds = revAdj.get(n.id) || [];
-    let maxPred = -1;
-    preds.forEach(p => {
-      const lp = layer.get(p);
-      if (lp != null && lp > maxPred) maxPred = lp;
-    });
-    if (maxPred >= 0) layer.set(n.id, maxPred + 1);
-    else layer.set(n.id, 0);
-  });
-
-  // --- group nodes by layer ---
-  let maxLayer = 0;
-  layer.forEach(v => {
-    if (v > maxLayer) maxLayer = v;
-  });
-
-  const layerNodes = [];
-  for (let i = 0; i <= maxLayer; i++) layerNodes.push([]);
-  nodes.forEach(n => {
-    const l = layer.get(n.id) || 0;
-    if (!layerNodes[l]) layerNodes[l] = [];
-    layerNodes[l].push(n);
-  });
-
-  // --- node radius: shrink automatically if a layer is very crowded ---
-  const marginX = 40;
-  const marginY = 40;
-
-  let maxPerLayer = 0;
-  layerNodes.forEach(ln => {
-    if (ln && ln.length > maxPerLayer) maxPerLayer = ln.length;
-  });
-  const stepXmin = (width - 2 * marginX) / ((maxPerLayer + 1) || 1);
-  const nodeRadius = Math.max(4, Math.min(15, stepXmin * 0.4));
-
-  const stepY = (height - 2 * marginY) / Math.max(1, maxLayer || 1);
-
-  // assign coordinates
-  layerNodes.forEach((ln, i) => {
-    if (!ln || !ln.length) return;
-    const stepX = (width - 2 * marginX) / (ln.length + 1);
-    ln.forEach((n, j) => {
-      n.x = marginX + stepX * (j + 1);
-      n.y = marginY + stepY * i;
-    });
-  });
-
-  // --- convert edges to D3-friendly objects (source/target = node objects) ---
+  // assign actual node objects to edges for D3
   edges.forEach(e => {
     e.source = nodesById.get(e.sourceId);
     e.target = nodesById.get(e.targetId);
   });
 
-  // --- draw ---
+  clearGraph(); // remove old elements
+
+  // --- arrow marker ---
   svg.append("defs")
     .append("marker")
     .attr("id", "arrow")
@@ -396,6 +291,14 @@ function drawGraph(graph) {
     .attr("d", "M 0 0 L 10 5 L 0 10 z")
     .attr("fill", "#555");
 
+  // --- force simulation ---
+  const simulation = d3.forceSimulation(nodes)
+    .force("link", d3.forceLink(edges).id(d => d.id).distance(100))
+    .force("charge", d3.forceManyBody().strength(-300))
+    .force("center", d3.forceCenter(width / 2, height / 2))
+    .force("collision", d3.forceCollide().radius(20));
+
+  // --- links ---
   const link = svg.append("g")
     .attr("class", "links")
     .selectAll("line")
@@ -405,45 +308,55 @@ function drawGraph(graph) {
     .attr("class", "link")
     .attr("marker-end", "url(#arrow)");
 
+  // --- nodes ---
   const node = svg.append("g")
     .attr("class", "nodes")
     .selectAll("g")
     .data(nodes)
     .enter()
     .append("g")
-    .attr("class", "node");
+    .attr("class", "node")
+    .call(d3.drag()
+      .on("start", (event, d) => {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+      })
+      .on("drag", (event, d) => {
+        d.fx = event.x;
+        d.fy = event.y;
+      })
+      .on("end", (event, d) => {
+        if (!event.active) simulation.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+      })
+    );
 
-  node.append("circle").attr("r", nodeRadius);
+  node.append("circle")
+    .attr("r", 10);
+
   node.append("text")
-    .attr("x", nodeRadius + 3)
+    .attr("x", 12)
     .attr("y", 3)
     .text(d => d.label);
 
   link.append("title")
     .text(d => (d.label || "Interaction") + (d.type ? ` (${d.type})` : ""));
 
-  function updatePositions() {
+  node.on("click", (e, d) => highlightRowsForNode(d.id));
+
+  simulation.on("tick", () => {
     link
       .attr("x1", d => d.source.x)
       .attr("y1", d => d.source.y)
-      .attr("x2", d => shiftedTarget(d, nodeRadius + 5).x)
-      .attr("y2", d => shiftedTarget(d, nodeRadius + 5).y);
+      .attr("x2", d => d.target.x)
+      .attr("y2", d => d.target.y);
 
     node.attr("transform", d => `translate(${d.x},${d.y})`);
-  }
-
-  node.on("click", (e, d) => highlightRowsForNode(d.id));
-  updatePositions();
-
-  node.call(
-    d3.drag()
-      .on("drag", (e, d) => {
-        d.x = e.x;
-        d.y = e.y;
-        updatePositions();
-      })
-  );
+  });
 }
+
 
 
 function drawGeneFrequencyChart(barData) {
