@@ -240,42 +240,42 @@ function highlightRowsForNode(nodeId) {
 // =====================================================
 //  GRAPH DRAWING – hierarchical layout (longest-path style)
 // =====================================================
-function clearGraph() {
+function clearGraph() {//clear the graph
   svg.selectAll("*").remove();
 }
 
-function shiftedTarget(d, offset) {
-  const dx = d.target.x - d.source.x;
-  const dy = d.target.y - d.source.y;
-  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+function shiftedTarget(d, offset) {//make sure the arrow stop at the node boundary (d: edge with position x and y, offset: radius of node)
+  const dx = d.target.x - d.source.x; //dx of the arrow
+  const dy = d.target.y - d.source.y; //dy of the arrow
+  const len = Math.sqrt(dx * dx + dy * dy) || 1; //length of the vector
   return {
-    x: d.target.x - (dx / len) * offset,
-    y: d.target.y - (dy / len) * offset
+    x: d.target.x - (dx / len) * offset, //substract a vector with the radius length (in the direction of the arrow) to the arrow 
+    y: d.target.y - (dy / len) * offset // this shift the target back along the edge by offset
   };
 }
 
 function drawGraph(graph) {
-  const nodes = graph.nodes;
+  const nodes = graph.nodes;//use output from convert to graph extract the nodes and the edges
   const rawLinks = graph.links;
 
   if (!nodes || nodes.length === 0) {
     statusEl.textContent = " No interactions found for this pathway.";
     return;
-  }
+  }//safety measure if no node found 
 
   // links expressed as ids (so we can do graph algorithms)
-  const edges = rawLinks.map(l => ({
-    sourceId: typeof l.source === "string" ? l.source : l.source.id,
+  const edges = rawLinks.map(l => ({//create a new object for each link
+    sourceId: typeof l.source === "string" ? l.source : l.source.id, //check if source is a string if yes keep this otherwise use the node ID
     targetId: typeof l.target === "string" ? l.target : l.target.id,
-    label: l.label,
+    label: l.label, //keep the labels
     type: l.type
   }));
 
-  const nodesById = new Map(nodes.map(n => [n.id, n]));
+  const nodesById = new Map(nodes.map(n => [n.id, n])); //create a map from the node array
 
   // assign actual node objects to edges for D3
   edges.forEach(e => {
-    e.source = nodesById.get(e.sourceId);
+    e.source = nodesById.get(e.sourceId);//replace the ID with actual node object from the map 
     e.target = nodesById.get(e.targetId);
   });
 
@@ -791,6 +791,7 @@ async function run() {
     statusEl.textContent = " Error: " + e.message;
   }
 }
+
 
 
 
