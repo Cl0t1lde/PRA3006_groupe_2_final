@@ -101,6 +101,103 @@ WHERE {
 }
 
 // =====================================================
+//  CONVERT RAW ROWS → GRAPH
+// =====================================================
+function convertToGraph(rows, labelToIri) {
+  const nodeMap = new Map();
+  const links = [];
+  const tableRows = [];
+  const edgeSet = new Set();
+
+  const currentPathway = pathwaySelect.value || "UNKNOWN";
+
+
+  function getNode(label) { // Ensure each label corresponds to a unique node object in nodeMap
+    const key = label.trim().toLowerCase().replace(/[^\w\s]|_/g, "").replace(/\s+/g, " "); //trim the label and put it in lowercase to normalise it in some way.
+    let node = nodeMap.get(key); //look for the node associeted to that key in the map
+  
+    if (!node) { //if no node for that key yet
+      node = { id: key, label: label }; // create a new node object with normalized id and original label
+      nodeMap.set(key, node); // Store the new node object in nodeMap for future lookups
+
+    }
+  
+    return node;
+  }
+  
+
+  rows.forEach(r => {
+    if (!r.sourceLabel || !r.targetLabel) return; // only process rows that have both source and target
+
+    const sourceLabel = r.sourceLabel.value || ""; //fetch source and target in each row 
+    const targetLabel = r.targetLabel.value || "";
+
+    const sNode = getNode(sourceLabel);//apply the small normalisation logic
+    const tNode = getNode(targetLabel);
+
+    // Update global frequency only if this pathway hasn't been counted yet
+    if (!loadedPathways.has(currentPathway)) { //if this pathway is not counted yet 
+      if (!globalFreq.has(sNode.id)) globalFreq.set(sNode.id, { count: 0, pathways: new Set() });//if the node is not in the frequency map yet, add it with a counter and a set for pathways 
+      if (!globalFreq.has(tNode.id)) globalFreq.set(tNode.id, { count: 0, pathways: new Set() });
+
+      globalFreq.get(sNode.id).pathways.add(currentPathway);// update the pathway set with the current patway the node is in
+      globalFreq.get(tNode.id).pathways.add(currentPathway);
+
+      globalFreq.get(sNode.id).count = globalFreq.get(sNode.id).pathways.size; //count the amount of pathways a node is in and store it in count.
+      globalFreq.get(tNode.id).count = globalFreq.get(tNode.id).pathways.size;
+    }
+
+
+    const key = sNode.id + "||" + tNode.id; //create a string with a source and target (edge between 2 nodes)
+    if (edgeSet.has(key)) return; //add the edge to the edgeset if not in there yet (avoid duplicates)
+    edgeSet.add(key);
+
+    links.push({//add in an array, all the edges (non-duplicate) usefull for D3
+      source: sNode.id,
+      target: tNode.id,
+      label: r.interactionLabel ? r.interactionLabel.value : "",
+      type: r.interactionType ? r.interactionType.value : ""
+    });
+
+    const iri = labelToIri.get(sNode.label) || "#"; //fetch the URL of the source node from the url list
+    tableRows.push({ //create an array with the content of the row in the future table
+      source: sNode.label,
+      target: tNode.label,
+      url: iri,
+      sourceId: sNode.id,
+      targetId: tNode.id
+    });
+  });
+
+  const nodes = Array.from(nodeMap.values()); //convert the map to an array
+  const hasSource = new Set(tableRows.map(r => r.sourceId));//extract all the sources from the Tablerows to put them in a set
+
+  //ensure nodes that don't have a target are also in the table.
+  nodes.forEach(n => {//for each node in node array
+    if (!hasSource.has(n.id)) {//if the node is not part of the source set (lonely node)
+      const iri = labelToIri.get(n.label) || "#"; //look up the url for that node
+      tableRows.push({//create a table row for that node 
+        source: n.label,
+        target: "(no outgoing interaction)",
+        url: iri,
+        sourceId: n.id,
+        targetId: ""
+      });
+
+      // update frequency counting for lonely node 
+      if (!loadedPathways.has(currentPathway)) {//if this pathway is not counted yet 
+        if (!globalFreq.has(n.id)) globalFreq.set(n.id, { count: 0, pathways: new Set() });//if the node is not in the frequency map yet, add it with a counter and a set for pathways 
+        globalFreq.get(n.id).pathways.add(currentPathway);// update the pathway set with the current patway the node is in
+        globalFreq.get(n.id).count = globalFreq.get(n.id).pathways.size;//count the amount of pathways a node is in and store it in count.
+      }
+
+    }
+  });
+
+  return { nodes, links, tableRows};  
+}
+
+// =====================================================
 //  TABLE HANDLING
 // =====================================================
 function clearTable() {
@@ -138,101 +235,6 @@ function highlightRowsForNode(nodeId) {
       tr.classList.add("highlight"); //highlight the row if it match (add the "highlight class"
     }
   });
-}
-
-// =====================================================
-//  CONVERT RAW ROWS → GRAPH
-// =====================================================
-function convertToGraph(rows, labelToIri) {
-  const nodeMap = new Map();
-  const links = [];
-  const tableRows = [];
-  const edgeSet = new Set();
-
-  const currentPathway = pathwaySelect.value || "UNKNOWN";
-
-
-  function getNode(label) { // Ensure each label corresponds to a unique node object in nodeMap
-    const key = label.trim().toLowerCase(); //trim the label and put it in lowercase to normalise it in some way.
-    let node = nodeMap.get(key); //look for the node associeted to that key in the map
-  
-    if (!node) { //if no node for that key yet
-      node = { id: key, label: label }; // create a new node object with normalized id and original label
-      nodeMap.set(key, node); // Store the new node object in nodeMap for future lookups
-    }
-  
-    return node;
-  }
-  
-
-  rows.forEach(r => {
-    if (!r.sourceLabel || !r.targetLabel) return;
-
-    const sourceLabel = r.sourceLabel.value || "";
-    const targetLabel = r.targetLabel.value || "";
-
-    const sNode = getNode(sourceLabel);
-    const tNode = getNode(targetLabel);
-
-    // ← Update global frequency only if this pathway hasn't been counted yet
-    if (!loadedPathways.has(currentPathway)) {
-      if (!globalFreq.has(sNode.id)) globalFreq.set(sNode.id, { count: 0, pathways: new Set() });
-      if (!globalFreq.has(tNode.id)) globalFreq.set(tNode.id, { count: 0, pathways: new Set() });
-
-      globalFreq.get(sNode.id).pathways.add(currentPathway);
-      globalFreq.get(tNode.id).pathways.add(currentPathway);
-
-      globalFreq.get(sNode.id).count = globalFreq.get(sNode.id).pathways.size;
-      globalFreq.get(tNode.id).count = globalFreq.get(tNode.id).pathways.size;
-    }
-
-
-    const key = sNode.id + "||" + tNode.id;
-    if (edgeSet.has(key)) return;
-    edgeSet.add(key);
-
-    links.push({
-      source: sNode.id,
-      target: tNode.id,
-      label: r.interactionLabel ? r.interactionLabel.value : "",
-      type: r.interactionType ? r.interactionType.value : ""
-    });
-
-    const iri = labelToIri.get(sNode.label) || "#";
-    tableRows.push({
-      source: sNode.label,
-      target: tNode.label,
-      url: iri,
-      sourceId: sNode.id,
-      targetId: tNode.id
-    });
-  });
-
-  const nodes = Array.from(nodeMap.values());
-  const hasSource = new Set(tableRows.map(r => r.sourceId));
-
-  nodes.forEach(n => {
-    if (!hasSource.has(n.id)) {
-      const iri = labelToIri.get(n.label) || "#";
-      tableRows.push({
-        source: n.label,
-        target: "(no outgoing interaction)",
-        url: iri,
-        sourceId: n.id,
-        targetId: ""
-      });
-
-      // ← NEW: also count isolated nodes
-      if (!loadedPathways.has(currentPathway)) {
-        if (!globalFreq.has(n.id)) globalFreq.set(n.id, { count: 0, pathways: new Set() });
-        globalFreq.get(n.id).pathways.add(currentPathway);
-        globalFreq.get(n.id).count = globalFreq.get(n.id).pathways.size;
-      }
-
-    }
-  });
-
-  return { nodes, links, tableRows};  // ← return it!
 }
 
 // =====================================================
@@ -789,6 +791,7 @@ async function run() {
     statusEl.textContent = " Error: " + e.message;
   }
 }
+
 
 
 
