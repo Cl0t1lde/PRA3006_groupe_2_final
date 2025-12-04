@@ -2,382 +2,347 @@
    Dark theme – accent #CFFFB1
    ================================ */
 
-:root {
-  --accent: #CFFFB1;
-  --accent-soft: rgba(207, 255, 177, 0.35);
-  --bg: #020617;
-  --card-bg: #020617;
-  --card-border: rgba(148, 163, 184, 0.5);
-  --text-main: #e5e7eb;
-  --text-muted: #9ca3af;
-  --radius-lg: 18px;
-  --radius-pill: 999px;
-  --shadow-soft: 0 18px 45px rgba(15, 23, 42, 0.55);
-}
-
-/* ===== Global layout ===== */
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  min-height: 100vh;
-  padding: 32px 40px;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: var(--text-main);
-  background:
-    radial-gradient(circle at top left, rgba(207, 255, 177, 0.25), transparent 55%),
-    radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.15), transparent 55%),
-    var(--bg);
-
-  display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr);
-  /* header, intro, controls, top row (table+chart), bottom row (graph) */
-  grid-template-rows: auto auto auto auto minmax(0, 1fr);
-  grid-template-areas:
-    "header header"
-    "intro  intro"
-    "controls controls"
-    "table  table"
-    "graph  graph";
-  gap: 18px 26px;
-}
-
-/* Stack on small screens */
-@media (max-width: 900px) {
+   :root {
+    --accent: #CFFFB1;
+    --accent-soft: rgba(207, 255, 177, 0.35);
+    --bg: #020617;
+    --card-bg: #020617;
+    --card-border: rgba(148, 163, 184, 0.5);
+    --text-main: #e5e7eb;
+    --text-muted: #9ca3af;
+    --radius-lg: 18px;
+    --radius-pill: 999px;
+    --shadow-soft: 0 18px 45px rgba(15, 23, 42, 0.55);
+  }
+  
+  /* ===== Global layout ===== */
+  
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+  
   body {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto auto auto auto;
+    margin: 0;
+    min-height: 100vh;
+    padding: 32px 40px;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: var(--text-main);
+    background:
+      radial-gradient(circle at top left, rgba(207, 255, 177, 0.25), transparent 55%),
+      radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.15), transparent 55%),
+      var(--bg);
+    
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr);
+    grid-template-rows: auto auto auto auto minmax(0, 1fr);
     grid-template-areas:
-      "header"
-      "intro"
-      "controls"
-      "table"
-      "graph";
+      "header header"
+      "intro  intro"
+      "controls controls"
+      "table  table"
+      "graph  graph";
+    gap: 18px 26px;
   }
-}
-
-/* ===== Header & intro ===== */
-
-h1 {
-  grid-area: header;
-  margin: 0;
-  font-size: 2.1rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  color: #f9fafb;
-}
-
-#pathwayLabel {
-  font-size: 0.9rem;
-  font-weight: 600;
-  padding: 4px 12px;
-  border-radius: var(--radius-pill);
-  background: var(--accent-soft);
-  color: #022c22;
-  border: 1px solid var(--accent);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-p {
-  grid-area: intro;
-  margin: 0;
-  max-width: 900px;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-
-/* ===== Controls row ===== */
-
-.controls {
-  grid-area: controls;
-  padding: 14px 18px;
-  border-radius: var(--radius-lg);
-  background: rgba(15, 23, 42, 0.9);
-  border: 1px solid var(--card-border);
-  box-shadow: var(--shadow-soft);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 18px;
-}
-
-.controls label {
-  font-weight: 500;
-  color: #e5e7eb;
-}
-
-#pathwaySelect {
-  appearance: none;
-  border-radius: var(--radius-pill);
-  border: 1px solid rgba(148, 163, 184, 0.7);
-  background: #020617;
-  color: var(--text-main);
-  padding: 8px 30px 8px 12px;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-
-#pathwaySelect:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-#loadBtn {
-  border: none;
-  border-radius: var(--radius-pill);
-  padding: 8px 18px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  background: linear-gradient(135deg, #a7f883, var(--accent));
-  color: #022c22;
-  box-shadow: 0 8px 24px rgba(34, 197, 94, 0.4);
-}
-
-/* Hide the “Done” status chip */
-#status {
-  display: none;
-}
-
-/* Stack controls on very narrow screens */
-@media (max-width: 640px) {
+  
+  /* Stack on smaller screens */
+  @media (max-width: 900px) {
+    body {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto auto auto auto auto;
+      grid-template-areas:
+        "header"
+        "intro"
+        "controls"
+        "table"
+        "graph";
+    }
+  }
+  
+  /* ===== Header & intro ===== */
+  
+  h1 {
+    grid-area: header;
+    margin: 0;
+    font-size: 2.1rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    color: #f9fafb;
+  }
+  
+  #pathwayLabel {
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: var(--radius-pill);
+    background: var(--accent-soft);
+    color: #022c22;
+    border: 1px solid var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  
+  p {
+    grid-area: intro;
+    margin: 0;
+    max-width: 900px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  
+  /* ===== Controls row ===== */
+  
   .controls {
-    flex-direction: column;
-    align-items: flex-start;
+    grid-area: controls;
+    padding: 14px 18px;
+    border-radius: var(--radius-lg);
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid var(--card-border);
+    box-shadow: var(--shadow-soft);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 18px;
   }
-
+  
+  .controls label {
+    font-weight: 500;
+    color: var(--text-main);
+  }
+  
+  #pathwaySelect {
+    appearance: none;
+    border-radius: var(--radius-pill);
+    border: 1px solid rgba(148, 163, 184, 0.7);
+    background: var(--bg);
+    color: var(--text-main);
+    padding: 8px 30px 8px 12px;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+  
+  #pathwaySelect:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  
+  #loadBtn {
+    border: none;
+    border-radius: var(--radius-pill);
+    padding: 8px 18px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: linear-gradient(135deg, #a7f883, var(--accent));
+    color: #022c22;
+    box-shadow: 0 8px 24px rgba(34, 197, 94, 0.4);
+  }
+  
   #status {
-    margin-left: 0;
+    display: none;
   }
-}
-
-/* ===== TOP ROW: table (left) + bar chart (right) ===== */
-
-.table-container {
-  grid-area: table;
-  margin: 0;
-  padding: 20px 24px;
-  border-radius: var(--radius-lg);
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  box-shadow: var(--shadow-soft);
-
-  /* internal 2-column layout: table | chart */
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-areas:
-    "tableTitle chartTitle"
-    "table      chart";
-  column-gap: 24px;
-  row-gap: 10px;
-
-  max-height: 640px;
-  overflow: auto;
-}
-
-/* Assign children to grid areas */
-.table-container h2:first-of-type {
-  grid-area: tableTitle;
-}
-
-.table-container h2:nth-of-type(2) {
-  grid-area: chartTitle;
-}
-
-#resultsTable {
-  grid-area: table;
-}
-
-/* NEW: chart wrapper occupies the chart grid area */
-#frequency-chart-wrapper {
-  grid-area: chart;
-}
-
-/* Panel headings */
-
-.table-container h2,
-.graph-container h2 {
-  margin: 0 0 14px;
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: #f9fafb;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.table-container h2::before,
-.graph-container h2::before {
-  content: "";
-  width: 6px;
-  height: 18px;
-  border-radius: 999px;
-  background: var(--accent);
-}
-
-/* ===== Interaction table ===== */
-
-#resultsTable {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.83rem;
-  margin-top: 8px;
-  background: rgba(15, 23, 42, 0.9);
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-#resultsTable thead {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
-#resultsTable thead th {
-  background: linear-gradient(90deg, var(--accent), #a7f883);
-  color: #022c22;
-  text-align: left;
-  padding: 10px 12px;
-  font-weight: 700;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.2);
-}
-
-#resultsTable tbody td {
-  padding: 8px 12px;
-  border-bottom: 1px solid rgba(31, 41, 55, 0.7);
-  color: var(--text-main);
-}
-
-#resultsTable tbody tr:nth-child(even) {
-  background: rgba(15, 23, 42, 0.85);
-}
-
-#resultsTable tbody tr:nth-child(odd) {
-  background: rgba(15, 23, 42, 0.95);
-}
-
-#resultsTable tbody tr:hover {
-  background: rgba(52, 211, 153, 0.12);
-}
-
-/* Highlight rows when clicking a node in the graph */
-.highlight {
-  background: rgba(251, 191, 36, 0.26) !important;
-}
-
-/* Links inside table */
-#resultsTable a {
-  color: var(--accent);
-  text-decoration: none;
-  border-bottom: 1px dashed rgba(207, 255, 177, 0.8);
-}
-
-#resultsTable a:hover {
-  text-decoration: underline;
-}
-
-/* ===== Frequency chart ===== */
-
-/* Scrollable container for the SVG bar chart */
-#frequency-chart-wrapper {
-  width: 100%;
-  max-height: 450px;          /* bigger chart area */
-  overflow-y: auto;           /* scroll when too many bars */
-  background: radial-gradient(
-    circle at top,
-    rgba(15, 23, 42, 0.4),
-    rgba(15, 23, 42, 0.95)
-  );
-  border-radius: 12px;
-  border: 1px solid var(--card-border);
-}
-
-/* SVG fills wrapper width; height is controlled by JS */
-#frequency-chart {
-  width: 100%;
-  display: block;
-}
-
-/* Make all text in the bar chart (ticks, legend, etc.) white */
-#frequency-chart text {
-  fill: #f9fafb;
-}
-
-/* Tooltip text black so it’s readable on white tooltip background */
-.tooltip {
-  color: #000;
-}
-
-/* ===== BOTTOM ROW: graph full width ===== */
-
-.graph-container {
-  grid-area: graph;
-  margin: 0;
-  padding: 20px 24px;
-  border-radius: var(--radius-lg);
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  box-shadow: var(--shadow-soft);
-  position: relative;
-}
-
-#graph {
-  display: block;
-  width: 100%;
-  height: 580px;
-  background: radial-gradient(circle at top, rgba(15, 23, 42, 0.5), rgba(15, 23, 42, 0.98));
-  border-radius: 14px;
-  border: 1px solid var(--card-border);
-}
-
-/* Edges */
-.link {
-  stroke: rgba(148, 163, 184, 0.75);
-  stroke-width: 1.4px;
-  stroke-linecap: round;
-}
-
-/* Nodes (no hover glow) */
-.node circle {
-  fill: #020617;
-  stroke: var(--accent);
-  stroke-width: 1.6px;
-}
-
-.node text {
-  font-size: 10px;
-  fill: #e5e7eb;
-  pointer-events: none;
-}
-
-/* ===== Misc ===== */
-
-strong {
-  color: #f9fafb;
-}
-
-em {
-  color: var(--accent);
-}
-
-
-#frequency-chart-wrapper {
-      width: 730px;
-      height: 400px;
-      overflow-y: auto; /* vertical scroll */
-      border: 1px solid #ccc;
+  
+  /* Stack controls on very narrow screens */
+  @media (max-width: 640px) {
+    .controls {
+      flex-direction: column;
+      align-items: flex-start;
     }
-    #frequency-chart {
-      display: block;
+  
+    #status {
+      margin-left: 0;
     }
+  }
+  
+  /* ===== Table & bar chart (top row) ===== */
+  
+  .table-container {
+    grid-area: table;
+    margin: 0;
+    padding: 20px 24px;
+    border-radius: var(--radius-lg);
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    box-shadow: var(--shadow-soft);
+  
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      "tableTitle chartTitle"
+      "table      chart";
+    column-gap: 24px;
+    row-gap: 10px;
+  
+    max-height: 640px;
+    overflow: auto;
+  }
+  
+  /* Panel headings */
+  .table-container h2:first-of-type {
+    grid-area: tableTitle;
+  }
+  
+  .table-container h2:nth-of-type(2) {
+    grid-area: chartTitle;
+  }
+  
+  .table-container h2,
+  .graph-container h2 {
+    margin: 0 0 14px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #f9fafb;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .table-container h2::before,
+  .graph-container h2::before {
+    content: "";
+    width: 6px;
+    height: 18px;
+    border-radius: 999px;
+    background: var(--accent);
+  }
+  
+  #resultsTable {
+    grid-area: table;
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.83rem;
+    margin-top: 8px;
+    background: rgba(15, 23, 42, 0.9);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  
+  #resultsTable thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  
+  #resultsTable thead th {
+    background: linear-gradient(90deg, var(--accent), #a7f883);
+    color: #022c02;
+    text-align: left;
+    padding: 10px 12px;
+    font-weight: 700;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.2);
+  }
+  
+  #resultsTable tbody td {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(31, 41, 55, 0.7);
+    color: var(--text-main);
+  }
+  
+  #resultsTable tbody tr:nth-child(even) {
+    background: rgba(15, 23, 42, 0.85);
+  }
+  
+  #resultsTable tbody tr:nth-child(odd) {
+    background: rgba(15, 23, 42, 0.95);
+  }
+  
+  #resultsTable tbody tr:hover {
+    background: rgba(52, 211, 153, 0.12);
+  }
+  
+  .highlight {
+    background: rgba(251, 191, 36, 0.26) !important;
+  }
+  
+  #resultsTable a {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px dashed rgba(207, 255, 177, 0.8);
+  }
+  
+  #resultsTable a:hover {
+    text-decoration: underline;
+  }
+  
+  /* ===== Frequency chart ===== */
+  
+  #frequency-chart-wrapper {
+    grid-area: chart;
+    width: 100%;
+    max-height: 450px;
+    overflow-y: auto;
+    background: radial-gradient(circle at top, rgba(15, 23, 42, 0.4), rgba(15, 23, 42, 0.95));
+    border-radius: 12px;
+    border: 1px solid var(--card-border);
+  }
+  
+  #frequency-chart {
+    width: 100%;
+    display: block;
+  }
+  
+  #frequency-chart text {
+    fill: #f9fafb;
+  }
+  
+  .tooltip {
+    color: #000;
+  }
+  
+  /* ===== Bottom row: graph ===== */
+  
+  .graph-container {
+    grid-area: graph;
+    margin: 0;
+    padding: 20px 24px;
+    border-radius: var(--radius-lg);
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    box-shadow: var(--shadow-soft);
+    position: relative;
+  }
+  
+  #graph {
+    display: block;
+    width: 100%;
+    height: 580px;
+    background: radial-gradient(circle at top, rgba(15, 23, 42, 0.5), rgba(15, 23, 42, 0.98));
+    border-radius: 14px;
+    border: 1px solid var(--card-border);
+  }
+  
+  /* Graph elements */
+  .link {
+    stroke: rgba(148, 163, 184, 0.75);
+    stroke-width: 1.4px;
+    stroke-linecap: round;
+  }
+  
+  .node circle {
+    fill: var(--bg);
+    stroke: var(--accent);
+    stroke-width: 1.6px;
+  }
+  
+  .node text {
+    font-size: 10px;
+    fill: var(--text-main);
+    pointer-events: none;
+  }
+  
+  /* ===== Miscellaneous ===== */
+  
+  strong {
+    color: #f9fafb;
+  }
+  
+  em {
+    color: var(--accent);
+  }
+  
