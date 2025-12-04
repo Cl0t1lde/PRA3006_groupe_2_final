@@ -4,7 +4,6 @@ const endpoint = "https://sparql.wikipathways.org/sparql";
 const globalFreq = new Map();         // gene → { count, pathways:Set }
 const loadedPathways = new Set();     // pathways we've already counted
 
-
 // SVG & DOM references
 const svg = d3.select("#graph");// create space for the graph
 const width = svg.node().clientWidth;
@@ -62,7 +61,6 @@ function removeDuplicateInteractions3(rows) {
   return result;
 }
 
-
 // =====================================================
 //  SPARQL QUERY 
 // =====================================================
@@ -111,7 +109,6 @@ function convertToGraph(rows, labelToIri) {
 
   const currentPathway = pathwaySelect.value || "UNKNOWN";
 
-
   function getNode(label) { // Ensure each label corresponds to a unique node object in nodeMap
     const key = label.trim().toLowerCase().replace(/[^\w\s]|_/g, "").replace(/\s+/g, " "); //trim the label and put it in lowercase to normalise it in some way.
     let node = nodeMap.get(key); //look for the node associeted to that key in the map
@@ -119,12 +116,10 @@ function convertToGraph(rows, labelToIri) {
     if (!node) { //if no node for that key yet
       node = { id: key, label: label }; // create a new node object with normalized id and original label
       nodeMap.set(key, node); // Store the new node object in nodeMap for future lookups
-
     }
   
     return node;
   }
-  
 
   rows.forEach(r => {
     if (!r.sourceLabel || !r.targetLabel) return; // only process rows that have both source and target
@@ -146,7 +141,6 @@ function convertToGraph(rows, labelToIri) {
       globalFreq.get(sNode.id).count = globalFreq.get(sNode.id).pathways.size; //count the amount of pathways a node is in and store it in count.
       globalFreq.get(tNode.id).count = globalFreq.get(tNode.id).pathways.size;
     }
-
 
     const key = sNode.id + "||" + tNode.id; //create a string with a source and target (edge between 2 nodes)
     if (edgeSet.has(key)) return; //add the edge to the edgeset if not in there yet (avoid duplicates)
@@ -190,7 +184,6 @@ function convertToGraph(rows, labelToIri) {
         globalFreq.get(n.id).pathways.add(currentPathway);// update the pathway set with the current patway the node is in
         globalFreq.get(n.id).count = globalFreq.get(n.id).pathways.size;//count the amount of pathways a node is in and store it in count.
       }
-
     }
   });
 
@@ -206,16 +199,16 @@ function clearTable() {
 }
 
 function fillTableFromGraph(tableRows) { // Fills the HTML results table using the graph-derived rows
-  const tbody = document.getElementById("resultsBody");
+  const tbody = document.getElementById("resultsBody"); //Get the table body from the HTML
   if (!tbody) return; // No table body found → nothing to update
 
   // =====================================================
   // 1. Loop through each row of processed graph data
   // =====================================================
-  tableRows.forEach(row => {
+  tableRows.forEach(row => { //create the table cell from each row 
     const tr = document.createElement("tr"); // create new table row
 
-    // store IDs on the <tr> as dataset attributes (useful for click handlers)
+    // store IDs on the <tr> as dataset attributes (useful for click handlers) (Associates the source and target IDs with this table row using HTML data attributes)
     tr.dataset.sourceId = row.sourceId;
     tr.dataset.targetId = row.targetId;
 
@@ -387,103 +380,115 @@ function drawGraph(graph) {
     node.attr("transform", d => `translate(${d.x},${d.y})`);//move the node to the position determined by the physics
   });
 }
-
+// =====================================================
+//  Frequency bar chart DRAWING 
+// =====================================================
 
 function drawGeneFrequencyChart(barData) {
   // --- Gather all pathways dynamically ---
-  const allPathways = new Set();
-  barData.forEach(d => Object.keys(d).forEach(k => { if (k !== "gene") allPathways.add(k); }));
-  const pathways = Array.from(allPathways);
+  const allPathways = new Set(); //create an empty set for the pathways 
+  barData.forEach(d => Object.keys(d).forEach(k => { if (k !== "gene") allPathways.add(k); })); //loop trough each key in the data, skip k=="gene" cause we only want the pathways, add the pathways in the set
+  const pathways = Array.from(allPathways); //convert the set to an array
 
   // --- Sort barData by total count descending ---
-  barData.forEach(d => d.total = pathways.reduce((sum, k) => sum + (d[k] || 0), 0));
-  barData.sort((a, b) => b.total - a.total);
+  barData.forEach(d => d.total = pathways.reduce((sum, k) => sum + (d[k] || 0), 0)); // Compute total number of pathways each gene appears in for the stacked bar chart (d[k] either 1 or 0 if the gene is in that pathway)
+  barData.sort((a, b) => b.total - a.total); // Sort genes by descending total frequency so the most connected genes appear first (if substraction is positive, b comes before a)
 
   // --- Dimensions ---
   const margin = { top: 60, right: 20, bottom: 30, left: 140 };
   const svgWidth = 700;
-  const svgHeight = barData.length * 25 + margin.top + margin.bottom;
+  const svgHeight = barData.length * 25 + margin.top + margin.bottom; //make the size of the SVG and the winddow
 
-  const svg = d3.select("#frequency-chart")
+  const svg = d3.select("#frequency-chart") //link it to the HTML element 
     .attr("width", svgWidth)
     .attr("height", svgHeight)
     .html(""); // clear previous chart
 
   const width = svgWidth - margin.left - margin.right;
-  const height = svgHeight - margin.top - margin.bottom;
+  const height = svgHeight - margin.top - margin.bottom;//Computes the inner drawing area of the SVG
 
-  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`); // Shift the chart away from the SVG edges using margins for axes, to better see the labels
 
   // --- Scales ---
   const x = d3.scaleLinear()
-    .domain([0, d3.max(barData, d => d.total)])
-    .range([0, width]);
+    .domain([0, d3.max(barData, d => d.total)]) //take into account the size of the data 
+    .range([0, width]); //define the size of the axis pixel
 
-  const y = d3.scaleBand()
-    .domain(barData.map(d => d.gene))
+  const y = d3.scaleBand() //use name in the y axis 
+    .domain(barData.map(d => d.gene)) //tells D3: the names are the categories to display on the y-axis.
     .range([0, height])
-    .padding(0.1);
+    .padding(0.1); //space between bars
 
-  const color = d3.scaleOrdinal(d3.schemeCategory10).domain(pathways);
+  const color = d3.scaleOrdinal(d3.schemeCategory10).domain(pathways); //assign color to the different pathways
 
   // --- Stack data ---
   const stack = d3.stack()
-    .keys(pathways)
-    .value((d, key) => d[key] || 0);
+    .keys(pathways) //which pathway to stack per genes 
+    .value((d, key) => d[key] || 0);// get the value of each apthway, if non value = 0
 
-  const series = stack(barData);
+  const series = stack(barData); //an array of arrays, one per pathway, tells D3 exactly where each block should start and end.
 
   // --- Tooltip (single div) ---
-  let tooltip = d3.select(".tooltip");
-  if (tooltip.empty()) {
-    tooltip = d3.select("body").append("div")
-      .attr("class", "tooltip")
-      .style("position", "absolute")
-      .style("background", "#fff")
-      .style("padding", "6px 10px")
-      .style("border", "1px solid #aaa")
-      .style("border-radius", "4px")
-      .style("pointer-events", "none")
-      .style("opacity", 0);
+  let tooltip = d3.select(".tooltip"); 
+  if (tooltip.empty()) { //if tooltip is not found creat it 
+    tooltip = d3.select("body").append("div") // Append it to the <body> so it floats above all content, create a new <div> element
+      .attr("class", "tooltip") // Give it a class for styling and selection
+      .style("position", "absolute") // Make it positionable anywhere on the page
+      .style("background", "#fff") // White background for readability
+      .style("padding", "6px 10px") // Some padding so text isn't cramped
+      .style("border", "1px solid #aaa") // Light border for visual separation
+      .style("border-radius", "4px") // Rounded corners for nicer look
+      .style("pointer-events", "none") // So the tooltip does not block mouse interactions
+      .style("opacity", 0); // Initially hidden (opacity 0)
   }
 
   // --- Draw bars ---
+  // Select all group elements for series (stacked data layers)
   g.selectAll("g.series")
-    .data(series)
-    .enter()
-    .append("g")
-    .attr("fill", d => color(d.key))
+    .data(series)                // Bind the stacked data series to these groups
+    .enter()                     // For each new series, enter the selection
+    .append("g")                 // Append a <g> element to hold the bars for this series
+    .attr("fill", d => color(d.key))  // Set the fill color based on the pathway key
+
+    // Now select rectangles inside each series group
     .selectAll("rect")
-    .data(d => d)
-    .enter()
-    .append("rect")
-    .attr("y", d => y(d.data.gene))
-    .attr("x", d => x(d[0]))
-    .attr("width", d => x(d[1]) - x(d[0]))
-    .attr("height", y.bandwidth())
+    .data(d => d)                // Bind the individual data points in the series to rectangles
+    .enter()                     // Enter for each rectangle
+    .append("rect")              // Append a rectangle for each data point
+    .attr("y", d => y(d.data.gene))                // Set vertical position based on the gene's y scale
+    .attr("x", d => x(d[0]))                       // Set horizontal start based on lower stack value
+    .attr("width", d => x(d[1]) - x(d[0]))        // Set width based on stack difference (it's size)
+    .attr("height", y.bandwidth())                // Height matches the band for the gene
+
+    // Tooltip interactions
     .on("mouseover", (event, d) => {
-      const activePathways = pathways.filter(k => d.data[k] > 0);
-      tooltip.transition().duration(100).style("opacity", 0.9);
-      tooltip.html(`<strong>${d.data.gene}</strong><br>Pathways: ${activePathways.join(", ")}`);
+      const activePathways = pathways.filter(k => d.data[k] > 0);  // Identify pathways present in this gene
+      tooltip.transition().duration(10).style("opacity", 0.9);   // animation of the aparition of the tooltip
+      tooltip.html(`<strong>${d.data.gene}</strong><br>Pathways: ${activePathways.join(", ")}`); // Show gene + pathways
     })
     .on("mousemove", event => {
-      tooltip.style("left", (event.pageX + 10) + "px")
-             .style("top", (event.pageY - 20) + "px");
+      tooltip.style("left", (event.pageX + 10) + "px")            // Move tooltip with cursor(x) end offset from the cursor
+            .style("top", (event.pageY - 20) + "px");           // Move tooltip with cursor (y)
     })
-    .on("mouseout", () => tooltip.transition().duration(200).style("opacity", 0));
+    .on("mouseout", () => tooltip.transition().duration(200).style("opacity", 0)); // Hide tooltip on exit
 
   // --- Axes ---
+  // Add y-axis (genes) on the left
   g.append("g").call(d3.axisLeft(y));
+
+  // Add x-axis (frequency/count) at the bottom
   g.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x));
 
   // --- Legend ---
+  // Create a group for the legend
   const legend = svg.append("g")
-    .attr("transform", `translate(${margin.left}, 20)`);
+    .attr("transform", `translate(${margin.left}, 20)`);  // Position legend at top-left inside margin
 
+  // Loop through each pathway to create legend items
   pathways.forEach((p, i) => {
-    const gLeg = legend.append("g").attr("transform", `translate(${i * 120},0)`);
-    gLeg.append("rect").attr("width", 15).attr("height", 15).attr("fill", color(p));
-    gLeg.append("text").attr("x", 20).attr("y", 12).text(p);
+    const gLeg = legend.append("g").attr("transform", `translate(${i * 120},0)`); // Space each legend item
+    gLeg.append("rect").attr("width", 15).attr("height", 15).attr("fill", color(p)); // Color box for pathway
+    gLeg.append("text").attr("x", 20).attr("y", 12).text(p);                        // Label for pathway
   });
 }
 
@@ -511,7 +516,6 @@ async function getGpmlAsBindings(pathwayId, revision=0) { //Gets PathwayID -> re
 
   return xmlDoc
 }
-
 
 function extractDataNodes(xmlDoc) {                       // Takes an XML document and pulls info from all <DataNode> elements
   const nodeEls = xmlDoc.getElementsByTagName("DataNode"); // All <DataNode> elements in the XML
@@ -589,14 +593,12 @@ function buildGroupsFromNodes(nodeMap, xmlDoc) { // Gets map of all nodes -> ret
   // =====================================================
   // 3. creates labels for group (AKT1) (AKT2) -> (AKT1 / AKT2)
   // =====================================================
-
   Object.values(groups).forEach(g => {
     g.label = g.label.join(" / ");
   });
 
   return groups;
 }
-
 
 function extractInteractions(xmlDoc) { //Gets GPML XML Data -> returns (interactionID, pointRef(Source, Target), InteractionType)
 
@@ -755,52 +757,51 @@ function collapseGroupsAndBuildBindings({
   };
 }
 
-
 // =====================================================
 //  MAIN RUN
 // =====================================================
-const pathwayTitle = document.getElementById("pathwayTitle");
-loadBtn.addEventListener("click", run);
-pathwaySelect.addEventListener("change", run);
+const pathwayTitle = document.getElementById("pathwayTitle"); //relate pathwayTitle to the <h1> HTML element (with id="pathwayTitle")
+loadBtn.addEventListener("click", run); //when load button is clicked execute the run() function
+pathwaySelect.addEventListener("change", run); // When the user changes the selection in the <select> element, execute the run() function
 
-async function run() {
-  const pathwayId = pathwaySelect.value || "WP17";
-  pathwayLabel.textContent = pathwayId;
-  statusEl.textContent = " Loading data…";
+async function run() { //main function using async to alow waiting 
+  const pathwayId = pathwaySelect.value; //assigned pathwayId used in the query to the selected one from the dropdown
+  pathwayLabel.textContent = pathwayId; //assign the pathway name to the HTML element (pathwayLabel)
+  statusEl.textContent = " Loading data…"; // Updates the status element to show a loading message while data is being fetched
   clearGraph();
   clearTable();
-
-  try {
+  
+  try {//will jump to catch block if any error happen 
     ////////////////////////////////
     //  1. Fetch Query Results    //
     ////////////////////////////////
-    const headers = { Accept: "application/sparql-results+json" };
-    const query = getQuery(pathwayId);
+    const headers = { Accept: "application/sparql-results+json" }; // Tell the SPARQL server we expect the query results in JSON format
+    const query = getQuery(pathwayId); //call the function get query feeding it the pathway id (so it complete the spargl query string)
 
-    const res = await fetch(endpoint + "?query=" + encodeURIComponent(query), { headers });
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    const res = await fetch(endpoint + "?query=" + encodeURIComponent(query), { headers });   // Sends the query to the SPARQL endpoint and waits for the server response
+    if (!res.ok) throw new Error("HTTP " + res.status); // If the HTTP request failed, stop execution and send an error to the catch block
 
-    const json = await res.json();
-    pathwayTitle.textContent = json.results.bindings?.[0]?.pathwayTitle?.value ?? "No title";
+    const json = await res.json(); //assign the json result to a javascript oject 
+    pathwayTitle.textContent = json.results.bindings?.[0]?.pathwayTitle?.value ?? "No title";// Display the pathway title from the SPARQL results in the HTML <h1>, or show "No title" if missing
 
     ////////////////////////////////
     //  2. Fetch QPML Results     //
     ////////////////////////////////
 
-    const xmlDoc = await getGpmlAsBindings(pathwayId);
-    const nodeMap = extractDataNodes(xmlDoc);
-    const groups = buildGroupsFromNodes(nodeMap, xmlDoc);
-    const interactions = extractInteractions(xmlDoc);
-    const sparqlStyle = collapseGroupsAndBuildBindings({
+    const xmlDoc = await getGpmlAsBindings(pathwayId);// Fetch and parse the GPML (XML pathway) file for the selected pathway
+    const nodeMap = extractDataNodes(xmlDoc); // Extract all nodes (genes, proteins, metabolites, etc.) from the GPML into a lookup map
+    const groups = buildGroupsFromNodes(nodeMap, xmlDoc);// Identify node groups or complexes from the GPML for visualization or grouping purposes
+    const interactions = extractInteractions(xmlDoc); //Extract interactions (edges) from the GPML
+    const sparqlStyle = collapseGroupsAndBuildBindings({ //Collapse groups and transform GPML nodes/interactions into a SPARQL-style binding format
       nodeMap, groups, interactions,
       pathwayId: pathwayId, revision: "0",
-      pathwayTitle: xmlDoc.documentElement.getAttribute("Name")
+      pathwayTitle: xmlDoc.documentElement.getAttribute("Name") // Pathway title from XML root element
     });
 
     ////////////////////////////////
     //  3. Merge Sparql + GPML    //
     ////////////////////////////////
-
+    //Combine the original SPARQL query results with the GPML-derived bindings
     const mergedBindings = [
         ...json.results.bindings,
         ...sparqlStyle.results.bindings
@@ -811,47 +812,37 @@ async function run() {
     const deduped = removeDuplicateInteractions3(json.results.bindings || []);
 
     // Build label → IRI map from raw rows (sources + targets)
-    const iriMap = new Map();
-    (json.results.bindings || []).forEach(row => {
-      if (row.sourceLabel && row.source) {
-        iriMap.set(row.sourceLabel.value, row.source.value);
+    const iriMap = new Map();  // Create a new empty Map to store label → IRI associations
+    (json.results.bindings || []).forEach(row => {  //Loop over each row of SPARQL/merged pathway results
+      if (row.sourceLabel && row.source) {            // Check if this row has a source label and a source IRI
+        iriMap.set(row.sourceLabel.value, row.source.value); // Add mapping: source label → source IRI
       }
-      if (row.targetLabel && row.target) {
-        iriMap.set(row.targetLabel.value, row.target.value);
+      if (row.targetLabel && row.target) {           // Check if this row has a target label and a target IRI
+        iriMap.set(row.targetLabel.value, row.target.value); // Add mapping: target label → target IRI
       }
     });
-
+    
+    //prepare data for converting it to graph and tables 
     const graph = convertToGraph(deduped, iriMap);
+    
     // Build a table from the global frequency
     const barData = [];
-    for (const [gene, data] of globalFreq.entries()) {
-      const geneObj = { gene };
-      data.pathways.forEach(p => { geneObj[p] = 1 }); // each pathway = 1 count
-      barData.push(geneObj);
+    for (const [gene, data] of globalFreq.entries()) { //go trough every gene and its associated pathway info. data = { count: number, pathways: Set(...) }
+      const geneObj = { gene };//create a gene object where we associate it's pathways 
+      data.pathways.forEach(p => { geneObj[p] = 1 }); // each pathway = 1 count (For each pathway p, we add a property to geneObj with a value of 1)
+      barData.push(geneObj); //After processing all pathways for this gene, the object is added to barData which looks like this:[ { gene: "gene1", PathwayA: 1, PathwayC: 1 }, ...
     }
 
-    drawGeneFrequencyChart(barData);
-
+    drawGeneFrequencyChart(barData); //Draw the frequency chart
     
-    loadedPathways.add(pathwayId);
+    loadedPathways.add(pathwayId); //keeps track of which pathways have already been loaded.
 
-    fillTableFromGraph(graph.tableRows);
-    drawGraph(graph);
-    statusEl.textContent = " Done.";
+    fillTableFromGraph(graph.tableRows); //populate the table 
+    drawGraph(graph); //draw the network graph 
+    
+    statusEl.textContent = " Done."; //update the status 
   } catch (e) {
     console.error(e);
     statusEl.textContent = " Error: " + e.message;
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
