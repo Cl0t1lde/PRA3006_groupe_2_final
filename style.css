@@ -292,7 +292,12 @@
   }
   
   .tooltip {
-    color: #000;
+    color: #222; /* default tooltip text */
+  }
+  
+  .tooltip strong {
+    color: #111;   /* darker for gene name */
+    font-weight: 700;
   }
   
   /* ===== Bottom row: graph ===== */
@@ -346,3 +351,4 @@
     color: var(--accent);
   }
   
+
