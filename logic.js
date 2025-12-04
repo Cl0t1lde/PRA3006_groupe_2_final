@@ -205,23 +205,50 @@ function clearTable() {
   if (tbody) tbody.innerHTML = ""; //if found clear the table
 }
 
-function fillTableFromGraph(tableRows) {
-  const tbody = document.getElementById("resultsBody"); //Get the table body from the HTML
-  if (!tbody) return; //if table not found stop the code 
+function fillTableFromGraph(tableRows) { // Fills the HTML results table using the graph-derived rows
+  const tbody = document.getElementById("resultsBody");
+  if (!tbody) return; // No table body found → nothing to update
 
-  tableRows.forEach(row => { //create the table cell from each row 
-    const tr = document.createElement("tr"); //create a table row
-    tr.dataset.sourceId = row.sourceId; //Associates the source and target IDs with this table row using HTML data attributes
+  // =====================================================
+  // 1. Loop through each row of processed graph data
+  // =====================================================
+  tableRows.forEach(row => {
+    const tr = document.createElement("tr"); // create new table row
+
+    // store IDs on the <tr> as dataset attributes (useful for click handlers)
+    tr.dataset.sourceId = row.sourceId;
     tr.dataset.targetId = row.targetId;
-    
-    //the HTML inside tr 
-    //fill in the row with a source, target and a link
+
+    // =====================================================
+    // 2. Build the URL cell
+    // Groups may have multiple URIs → row.url becomes an array
+    // Single nodes → row.url is a string
+    // =====================================================
+    let urlCell = "";
+
+    // Case 1: multiple URLs (array)
+    if (Array.isArray(row.url)) {
+      for (const u of row.url) {
+        urlCell += `<a href="${u}" target="_blank" rel="noopener noreferrer">Link to source</a><br>`;
+      }
+    }
+
+    // Case 2: single URL (string)
+    else {
+      urlCell = `<a href="${row.url}" target="_blank" rel="noopener noreferrer">Link to source</a>`;
+    }
+
+    // =====================================================
+    // 3. Insert row content into the table
+    // =====================================================
     tr.innerHTML = `
-      <td>${row.source}</td>
-      <td>${row.target}</td>
-      <td><a href="${row.url}" target="_blank" rel="noopener noreferrer">Link to source</a></td>
+      <td>${row.source}</td>   <!-- Display source label -->
+      <td>${row.target}</td>   <!-- Display target label -->
+      <td>${urlCell}</td>      <!-- Display the URL(s), formatted above -->
     `;
-    tbody.appendChild(tr); //add each completed row successively 
+
+    // Add the newly created row to the table
+    tbody.appendChild(tr);
   });
 }
 
@@ -286,7 +313,7 @@ function drawGraph(graph) {
     .append("marker")
     .attr("id", "arrow")
     .attr("viewBox", "0 0 10 10")
-    .attr("refX", 10)
+    .attr("refX", 20)
     .attr("refY", 5)
     .attr("markerWidth", 10)
     .attr("markerHeight", 10)
@@ -461,26 +488,27 @@ function drawGeneFrequencyChart(barData) {
   });
 }
 
-async function getGpmlAsBindings(pathwayId, revision=0) {
-  //
+async function getGpmlAsBindings(pathwayId, revision=0) { //Gets PathwayID -> returns GPML data as XML
+  // =====================================================
   // 1. Fetch JSON that contains the GPML inside data.pathway.gpml
-  //
+  // =====================================================
+
+  // define link to Json
   const jsonURL = `https://webservice.wikipathways.org/getPathway?pwId=${pathwayId}&format=json&revision=${revision}`;
+  // wait to fetch json + then save it as JSON
   const json = await fetch(jsonURL).then(r => r.json());
+  const gpmlText = json.pathway.gpml; // Gets from JSON -> gpml data as txt
+  // if (!gpmlText) throw new Error("GPML not found in JSON response"); //Debugging Line
 
-  const gpmlText = json.pathway.gpml;
-  console.log(gpmlText)
-  if (!gpmlText) throw new Error("GPML not found in JSON response");
-
-  //
+  // =====================================================
   // 2. Clean namespaces so DOMParser can read it simply
-  //
+  // =====================================================
   const cleanedXml = gpmlText
     .replace(/xmlns(:\w+)?="[^"]+"/g, "")    // remove xmlns and xmlns:gpml
     .replace(/gpml:/g, "");                 // remove gpml: prefixes
 
   const parser = new DOMParser();
-  const xmlDoc = parser.parseFromString(cleanedXml, "application/xml");
+  const xmlDoc = parser.parseFromString(cleanedXml, "application/xml"); // saves GPML data as an actual XML line
 
   return xmlDoc
 }
@@ -524,45 +552,64 @@ function extractDataNodes(xmlDoc) {                       // Takes an XML docume
   return nodeMap;                                          // Give back the object with all nodes and their info
 }
 
-function buildGroupsFromNodes(nodeMap, xmlDoc) {
+function buildGroupsFromNodes(nodeMap, xmlDoc) { // Gets map of all nodes -> returns list of all groups
   const groups = {}; // groupId -> { id, members: [nodeIds], labels: [labels] }
 
-  // 1. First, build groups based on node.groupRef (your original logic)
+  // =====================================================
+  // 1. for each node in node map - if it has group Ref -> creates a group
+  // =====================================================
   Object.values(nodeMap).forEach(node => {
-    if (!node.groupRef) return;
-    const gid = node.groupRef;
-    if (!groups[gid]) groups[gid] = { id: gid, members: [], labels: [] };
-    groups[gid].members.push(node.id);
-    groups[gid].labels.push(node.label);
+    if (!node.groupRef) return; // No group ref -> skip
+    const gid = node.groupRef; // else sets gid = groupRef
+    if (!groups[gid]) groups[gid] = { id: gid, members: [], label: [], uris: [] }; // if GroupRef (gid) is new creates gid{id,members,labels}
+    groups[gid].members.push(node.id); // In all cases (has groupRef) ->adds node id to members list of group
+    groups[gid].uris.push(node.uri);
+    groups[gid].label.push(node.label); // And adds the label to label list of group
   });
 
-  // 2. Now adjust group IDs based on <Group> elements in XML
+  // =====================================================
+  // 2. Change the groupID to its Graph ID
+  // All interactions are based onthe GraphID
+  // GroupID is just used to define the group
+  // =====================================================
+
+  // checks for group section in the GPML ( group Z : {group ID: X} {GraphID: Y})
   xmlDoc.querySelectorAll("Group").forEach(g => {
     const groupId = g.getAttribute("GroupId");
     const graphId = g.getAttribute("GraphId");
 
     // Only adjust if:
-    // - we already discovered this group from nodes
+    // - GroupID is found in the nodes as GroupRef
     // - AND graphId exists
     // - AND groupId != graphId
     if (groups[groupId] && graphId && graphId !== groupId) {
-      groups[groupId].id = graphId;   // <- Replace ID with graphId
+      groups[groupId].id = graphId;   // <- Replace GroupID with graphId
     }
   });
 
-  // 3. Build labels as before
+  // =====================================================
+  // 3. creates labels for group (AKT1) (AKT2) -> (AKT1 / AKT2)
+  // =====================================================
+
   Object.values(groups).forEach(g => {
-    g.label = g.labels.join(" / ");
+    g.label = g.label.join(" / ");
   });
 
   return groups;
 }
 
 
-function extractInteractions(xmlDoc) {                                   // Takes an XML document and reads all <Interaction> elements
+function extractInteractions(xmlDoc) { //Gets GPML XML Data -> returns (interactionID, pointRef(Source, Target), InteractionType)
+
+  // =====================================================
+  // 1. Define Variables and constants
+  // =====================================================
   const interactionEls = xmlDoc.getElementsByTagName("Interaction");    // All <Interaction> elements in the XML
   const interactions = [];                                              // Array where we will store interaction info
 
+  // =====================================================
+  // 2. for each Interaction -> get GraphID, and pointEls (point: {source, target})
+  // =====================================================
   for (let i = 0; i < interactionEls.length; i++) {                     // Go through each Interaction one by one
     const ie = interactionEls[i];                                       // Current Interaction element
     const interId = ie.getAttribute("GraphId") || `interaction_${i}`;   // Use its GraphId, or make one like "interaction_0"
@@ -570,6 +617,9 @@ function extractInteractions(xmlDoc) {                                   // Take
     const pointRefs = [];                                               // Will hold references to nodes this interaction touches
     const arrowHeads = [];                                              // Will hold arrow shapes/directions for each point
 
+  // =====================================================
+  // 3. for each (point: {source, target}) -> get ID and arrowHeads ("Arrow" or "Tbar") of target and source
+  // =====================================================
     for (let p = 0; p < pointEls.length; p++) {                         // Loop through each Point in this interaction
       const pe = pointEls[p];                                           // Current Point element
       pointRefs.push(pe.getAttribute("GraphRef") || null);              // Save which node this point is connected to (or null)
@@ -589,97 +639,100 @@ function collapseGroupsAndBuildBindings({
   pathwayId,
   revision,
   pathwayTitle
-}) {
-  // create supernode records: map groupId -> supernode object
-  const supernodes = {};
+}) { // Gets Everything from previous GPML functions and creates a binding-type data structure
+
+  // =====================================================
+  // 1. Restructure each Group to match the shape of a DataNode
+  // =====================================================
   Object.values(groups).forEach(g => {
-    const superId = `group_${g.id}`; // chosen unique id
-    const uri = `http://example.org/${superId}`; // or choose identifiers.org pattern
-    supernodes[g.id] = {
-      id: superId,
-      uri,
+    const uri = ``; // could be filled or follow identifiers.org pattern
+    groups[g.id] = {
+      id: g.id,
+      uri: g.uris,          // uniform URI field for both nodes + groups
       label: g.label,
       members: g.members,
-      type: "http://vocabularies.wikipathways.org/wp#Group"
+      type: "Group" // explicitly mark these as Group-type entries
     };
   });
 
-  // helper to resolve an id (could be a node GraphId OR a group GraphId)
+  // =====================================================
+  // 2. Helper: resolves a reference ID into either a node or a group
+  // =====================================================
   function resolveRef(ref) {
-    if (!ref) return null;
-    // If ref matches a nodeGraphId
-    if (nodeMap[ref]) return nodeMap[ref];
-    // If ref matches a group GraphId and we made a supernode
-    if (supernodes[ref]) return supernodes[ref];
-    // If ref looks like supernode id (rare), check that
-    // fallback null
-    return null;
+    if (!ref) return null;            // ref missing → no source/target
+    if (nodeMap[ref]) return nodeMap[ref];  // matches a node GraphId
+    if (groups[ref]) return groups[ref];    // matches a group GraphId
+    return null;                      // unknown → skip
   }
 
   const bindings = [];
 
+  // =====================================================
+  // 3. Build source/target bindings from GPML interactions
+  // =====================================================
   interactions.forEach(inter => {
-    // For typical pairs we use first point as source, last point as target
-    const pts = inter.pointRefs.filter(Boolean);
-    if (pts.length < 2) return;
+    const pts = inter.pointRefs.filter(Boolean); // remove null entries
+    if (pts.length < 2) return; // interaction missing endpoints → skip
 
+    // Default: first ref = source, second ref = target
     let sourceRef = pts[0];
-    let targetRef = pts[pts.length - 1];
+    let targetRef = pts[1];
 
-    // If sourceRef is a member with groupRef, use the group's supernode instead
-    if (nodeMap[sourceRef]?.groupRef && supernodes[nodeMap[sourceRef].groupRef]) {
-      sourceRef = nodeMap[sourceRef].groupRef; // group GraphId
+    // -----------------------------------------------------
+    // 3A. If a node belongs to a group → replace nodeRef with groupId
+    // -----------------------------------------------------
+    if (nodeMap[sourceRef]?.groupRef && groups[nodeMap[sourceRef].groupRef]) {
+      sourceRef = groups[nodeMap[sourceRef].groupRef].id; // use Group GraphId
     }
 
-    if (nodeMap[targetRef]?.groupRef && supernodes[nodeMap[targetRef].groupRef]) {
-      targetRef = nodeMap[targetRef].groupRef;
+    if (nodeMap[targetRef]?.groupRef && groups[nodeMap[targetRef].groupRef]) {
+      targetRef = groups[nodeMap[targetRef].groupRef].id;
     }
 
+    // Resolve to actual node/group objects
     const source = resolveRef(sourceRef);
     const target = resolveRef(targetRef);
-    if (!source || !target) return;
 
-    // build actual URIs (prefer node.uri, otherwise use supernode.uri)
+    if (!source || !target) return; // unresolved → skip interaction
+
+    // =====================================================
+    // 4. Pick URIs (fallback to id if no uri found)
+    // =====================================================
     const sourceUri = source.uri || source.uri === null ? source.uri : source.id;
     const targetUri = target.uri || target.uri === null ? target.uri : target.id;
 
+    // =====================================================
+    // 5. Build SPARQL-style binding object
+    // =====================================================
     const binding = {
       interaction: {
         type: "uri",
         value: `http://rdf.wikipathways.org/Pathway/${pathwayId}_r${revision}/WP/Interaction/${inter.interactionId}`
       },
-      interactionType: {
-        type: "uri",
-        value: "http://vocabularies.wikipathways.org/wp#DirectedInteraction"
-      },
-      pathwayTitle: {
+
+      pathwayTitle: { 
         type: "literal",
         "xml:lang": "en",
-        value: pathwayTitle
+        value: pathwayTitle 
       },
 
-      source: { type: "uri", value: sourceUri || source.id },
+      // ----- Source -----
+      source:      { type: "uri",     value: sourceUri || source.id },
       sourceLabel: { type: "literal", value: source.label },
-      sourceType: { type: "uri", value: source.type },
+      sourceType:  { type: "uri",     value: source.type },
 
-      target: { type: "uri", value: targetUri || target.id },
+      // ----- Target -----
+      target:      { type: "uri",     value: targetUri || target.id },
       targetLabel: { type: "literal", value: target.label },
-      targetType: { type: "uri", value: target.type }
+      targetType:  { type: "uri",     value: target.type }
     };
-
-    // attach group metadata optionally (if source or target is a supernode)
-    if (supernodes[sourceRef]) {
-      binding.sourceGroup = { type: "literal", value: sourceRef };
-      binding.sourceMembers = { type: "literal", value: supernodes[sourceRef].members.join(",") };
-    }
-    if (supernodes[targetRef]) {
-      binding.targetGroup = { type: "literal", value: targetRef };
-      binding.targetMembers = { type: "literal", value: supernodes[targetRef].members.join(",") };
-    }
 
     bindings.push(binding);
   });
 
+  // =====================================================
+  // 6. Return SPARQL-like structure containing bindings
+  // =====================================================
   return {
     head: {
       link: [],
@@ -741,7 +794,7 @@ async function run() {
     const interactions = extractInteractions(xmlDoc);
     const sparqlStyle = collapseGroupsAndBuildBindings({
       nodeMap, groups, interactions,
-      pathwayId: "WP17", revision: "137452",
+      pathwayId: pathwayId, revision: "0",
       pathwayTitle: xmlDoc.documentElement.getAttribute("Name")
     });
 
@@ -791,6 +844,7 @@ async function run() {
     statusEl.textContent = " Error: " + e.message;
   }
 }
+
 
 
 
