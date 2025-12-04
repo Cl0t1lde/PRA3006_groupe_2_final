@@ -310,84 +310,83 @@ function drawGraph(graph) {
 
   // --- arrow marker ---
   svg.append("defs")
-    .append("marker")
-    .attr("id", "arrow")
-    .attr("viewBox", "0 0 10 10")
-    .attr("refX", 20)
-    .attr("refY", 5)
+    .append("marker") //marker for the arrow
+    .attr("id", "arrow") //give it a name so we can reference it 
+    .attr("viewBox", "0 0 10 10") //coordinate system fro the arrow
+    .attr("refX", 10)
+    .attr("refY", 5) //the placement of the trangle compare to the line
     .attr("markerWidth", 10)
-    .attr("markerHeight", 10)
+    .attr("markerHeight", 10)//it's size
     .attr("orient", "auto")
     .append("path")
-    .attr("d", "M 0 0 L 10 5 L 0 10 z")
-    .attr("fill", "#555");
+    .attr("d", "M 0 0 L 10 5 L 0 10 z")//draw the triangle (the arrow tip)
+    .attr("fill", "#555");//give it a color 
 
   // --- force simulation ---
-  const simulation = d3.forceSimulation(nodes)
-    .force("link", d3.forceLink(edges).id(d => d.id).distance(100))
-    .force("charge", d3.forceManyBody().strength(-300))
-    .force("center", d3.forceCenter(width / 2, height / 2))
-    .force("collision", d3.forceCollide().radius(20));
+  const simulation = d3.forceSimulation(nodes) //create a force simulation to help with the mouvement of nodes
+    .force("link", d3.forceLink(edges).id(d => d.id).distance(100)) //add a force link to the edges (For each node d, use its id property to match edges to nodes) also defined the distance between nodes
+    .force("charge", d3.forceManyBody().strength(-100)) //add the type of the force here repulsive charge 
+    .force("center", d3.forceCenter(width / 2, height / 2)) //center of the force in the middle 
+    .force("collision", d3.forceCollide().radius(10)); //minimum distance between nodes, allow bounce interaction
 
   // --- links ---
-  const link = svg.append("g")
-    .attr("class", "links")
-    .selectAll("line")
-    .data(edges)
-    .enter()
-    .append("line")
-    .attr("class", "link")
-    .attr("marker-end", "url(#arrow)");
+  const link = svg.append("g") //add group for all the link lines
+    .attr("class", "links") //add a class on the whole group for css styling
+    .selectAll("line") // Prepare to bind data to <line> elements (none exist yet)
+    .data(edges) // Bind the array of edge objects to future line elements
+    .enter() // For each data item without a corresponding DOM element, create one
+    .append("line") // Append a <line> element for each edge
+    .attr("class", "link") //add a class for each individual link for css
+    .attr("marker-end", "url(#arrow)"); //attach the arrowhead marker to the end of each link
 
   // --- nodes ---
-  const node = svg.append("g")
-    .attr("class", "nodes")
-    .selectAll("g")
-    .data(nodes)
-    .enter()
-    .append("g")
-    .attr("class", "node")
-    .call(d3.drag()
-      .on("start", (event, d) => {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
+  const node = svg.append("g") // Create a group to hold all nodes
+    .attr("class", "nodes") // Add a class for styling or batch selection
+    .selectAll("g") // Start a virtual selection (no <g> elements exist yet)
+    .data(nodes) // Bind the nodes data to future node groups
+    .enter() // Create DOM elements for each data item with no match
+    .append("g") // Each node is a <g> container (for circle + text together)
+    .attr("class", "node") // Each node is a <g> container (for circle + text together)
+    .call(d3.drag() // Enable dragging behavior on each node
+      .on("start", (event, d) => { // Fired when dragging starts (user clicked and is dragging the node)
+        if (!event.active) simulation.alphaTarget(0.3).restart(); //wake up the physics 
         d.fx = d.x;
-        d.fy = d.y;
+        d.fy = d.y;//fix the node position to follow the mouse and not the physic
       })
       .on("drag", (event, d) => {
         d.fx = event.x;
-        d.fy = event.y;
+        d.fy = event.y; //follow the mouse position 
       })
       .on("end", (event, d) => {
-        if (!event.active) simulation.alphaTarget(0);
+        if (!event.active) simulation.alphaTarget(0); //tell the force simulation to cool down, let the graph settle
         d.fx = null;
-        d.fy = null;
+        d.fy = null;//node not captured by the mous anymore free to move with the physics
       })
     );
 
   node.append("circle")
-    .attr("r", 10);
+    .attr("r", 10); //defined the shape of the node
 
-  node.append("text")
+  node.append("text") //add the label of the node
     .attr("x", 12)
     .attr("y", 3)
     .text(d => d.label);
 
   link.append("title")
-    .text(d => (d.label || "Interaction") + (d.type ? ` (${d.type})` : ""));
+    .text(d => (d.label || "Interaction") + (d.type ? ` (${d.type})` : ""));//if any interaction, add the type of interaction when you hover over the line
 
-  node.on("click", (e, d) => highlightRowsForNode(d.id));
+  node.on("click", (e, d) => highlightRowsForNode(d.id)); //on clic use the function to highlight the row of the source
 
-  simulation.on("tick", () => {
+  simulation.on("tick", () => {//apply the physics simulation
     link
       .attr("x1", d => d.source.x)
       .attr("y1", d => d.source.y)
       .attr("x2", d => d.target.x)
-      .attr("y2", d => d.target.y);
+      .attr("y2", d => d.target.y); //move the line to follow the node positions (initial to final)
 
-    node.attr("transform", d => `translate(${d.x},${d.y})`);
+    node.attr("transform", d => `translate(${d.x},${d.y})`);//move the node to the position determined by the physics
   });
 }
-
 
 
 function drawGeneFrequencyChart(barData) {
@@ -844,6 +843,7 @@ async function run() {
     statusEl.textContent = " Error: " + e.message;
   }
 }
+
 
 
 
