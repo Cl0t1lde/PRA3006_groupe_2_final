@@ -682,7 +682,7 @@ function collapseGroupsAndBuildBindings({
     // -----------------------------------------------------
     // 3A. If a node belongs to a group → replace nodeRef with groupId
     // -----------------------------------------------------
-    if (nodeMap[sourceRef]?.groupRef && groups[nodeMap[sourceRef].groupRef]) {
+    if (nodeMap[sourceRef]?.groupRef && groups[nodeMap[sourceRef].groupRef]) { //if the node is part of a group and if the group exist
       sourceRef = groups[nodeMap[sourceRef].groupRef].id; // use Group GraphId
     }
 
@@ -846,3 +846,4 @@ async function run() { //main function using async to alow waiting
     statusEl.textContent = " Error: " + e.message;
   }
 }
+
